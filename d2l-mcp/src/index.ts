@@ -15,6 +15,8 @@ import { calendarTools } from "./tools/calendar.js";
 import { newsTools } from "./tools/news.js";
 import { enrollmentTools } from "./tools/enrollments.js";
 import { downloadFile } from "./tools/files.js";
+import { ApiFootballClient } from "./football-client.js";
+import { tools as footballTools, handleToolCall as handleFootballTool } from "./tools/football.js";
 
 function createServer(): McpServer {
   const server = new McpServer({
@@ -220,6 +222,59 @@ function createServer(): McpServer {
       return text;
     })
   );
+
+  // Register football tools
+  const footballApiKey = process.env.API_FOOTBALL_KEY;
+  if (footballApiKey) {
+    const footballClient = new ApiFootballClient(footballApiKey);
+    
+    for (const tool of footballTools) {
+      // Convert JSON schema properties to Zod schemas
+      const zodSchema: Record<string, any> = {};
+      
+      if (tool.inputSchema.properties) {
+        const props = tool.inputSchema.properties;
+        for (const [key, prop] of Object.entries(props)) {
+          const p = prop as any;
+          let zodType;
+          
+          if (p.type === 'string') {
+            zodType = z.string();
+          } else if (p.type === 'number') {
+            zodType = z.number();
+          } else if (p.type === 'boolean') {
+            zodType = z.boolean();
+          } else {
+            zodType = z.any();
+          }
+          
+          // Make optional if not in required array
+          const isRequired = tool.inputSchema.required?.includes(key);
+          if (!isRequired) {
+            zodType = zodType.optional();
+          }
+          
+          if (p.description) {
+            zodType = zodType.describe(p.description);
+          }
+          
+          zodSchema[key] = zodType;
+        }
+      }
+      
+      server.tool(
+        tool.name,
+        tool.description,
+        zodSchema,
+        wrapToolHandler(tool.name, async (args) => {
+          return await handleFootballTool(tool.name, args, footballClient);
+        })
+      );
+    }
+    console.error(`[INIT] Registered ${footballTools.length} football tools`);
+  } else {
+    console.error("[INIT] API_FOOTBALL_KEY not found, skipping football tools");
+  }
 
   return server;
 }
