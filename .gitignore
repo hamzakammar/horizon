@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+.env
+.d2l-session/
+dist/
+*.tar.gz
+logs/

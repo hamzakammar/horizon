@@ -1,0 +1,21 @@
+{
+  "name": "mcp-workspace",
+  "version": "1.0.0",
+  "description": "Multi-MCP workspace for managing multiple Model Context Protocol servers",
+  "private": true,
+  "scripts": {
+    "install-all": "for dir in */; do (cd \"$dir\" && [ -f package.json ] && npm install); done",
+    "build-all": "for dir in */; do (cd \"$dir\" && [ -f package.json ] && npm run build --if-present); done",
+    "sync-ec2": "node scripts/sync-to-ec2.js",
+    "start-all": "pm2 start ecosystem.config.cjs",
+    "stop-all": "pm2 stop all",
+    "restart-all": "pm2 restart all",
+    "logs": "pm2 logs",
+    "status": "pm2 status",
+    "auth-d2l": "cd d2l-mcp && npm run auth",
+    "sync-sessions": "bash scripts/sync-sessions.sh"
+  },
+  "keywords": ["mcp", "model-context-protocol", "workspace"],
+  "author": "",
+  "license": "MIT"
+}
