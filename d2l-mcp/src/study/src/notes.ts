@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { homedir } from "node:os";
 import { createRequire } from "node:module";
@@ -178,6 +179,18 @@ export const NotesTools = {
 				for (const entry of pdfEntries) {
 					try {
 						const { absolutePath, relativePath } = resolvePdfPath(entry, repoPath);
+						
+						// Check if file exists before attempting to parse
+						if (!fsSync.existsSync(absolutePath)) {
+							courseResults.push({
+								course,
+								pdf: entry,
+								status: "error",
+								error: `File not found: ${absolutePath}`,
+							});
+							continue;
+						}
+						
 						const pdfName = path.basename(absolutePath);
 						const pdfSlug = slugifyPdfName(pdfName);
 						const url = buildUrl(absolutePath, relativePath, repoWebBase);
@@ -212,6 +225,7 @@ export const NotesTools = {
 					// This requires a unique constraint on (course_id, anchor) in the database
 					for (let i = 0; i < rows.length; i += INSERT_BATCH_SIZE) {
 						const batch = rows.slice(i, i + INSERT_BATCH_SIZE);
+						console.error(`[SYNC] Upserting batch ${Math.floor(i / INSERT_BATCH_SIZE) + 1}/${Math.ceil(rows.length / INSERT_BATCH_SIZE)} for ${course} (${batch.length} rows)`);
 						const { error: upsertError } = await supabase
 							.from("note_sections")
 							.upsert(batch, {
@@ -220,23 +234,24 @@ export const NotesTools = {
 							});
 
 						if (upsertError) {
+							console.error(`[SYNC] Upsert error for ${course}:`, upsertError);
 							return JSON.stringify({ success: false, error: upsertError.message }, null, 2);
 						}
 					}
 
 					// Delete any chunks that are no longer in the PDFs (e.g., if PDFs were removed or shortened)
-					const currentAnchors = rows.map((r) => r.anchor);
-					if (currentAnchors.length > 0) {
-						const { error: cleanupError } = await supabase
-							.from("note_sections")
-							.delete()
-							.eq("course_id", course)
-							.not("anchor", "in", `(${currentAnchors.map((a) => `'${a}'`).join(",")})`);
-
-						if (cleanupError) {
-							console.error(`[SYNC] Cleanup error for ${course}:`, cleanupError);
-						}
-					}
+					// TODO: Implement proper cleanup that handles large anchor lists
+					// const currentAnchors = rows.map((r) => r.anchor);
+					// if (currentAnchors.length > 0) {
+					// 	const { error: cleanupError } = await supabase
+					// 		.from("note_sections")
+					// 		.delete()
+					// 		.eq("course_id", course)
+					// 		.not("anchor", "in", `(${currentAnchors.map((a) => `'${a.replace(/'/g, "''")}'`).join(",")})`);
+					// 	if (cleanupError) {
+					// 		console.error(`[SYNC] Cleanup error for ${course}:`, cleanupError);
+					// 	}
+					// }
 
 					totalPdfs += processedPdfCount;
 					totalChunks += courseChunkCount;
