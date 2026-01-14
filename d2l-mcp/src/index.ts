@@ -21,6 +21,7 @@ import { piazzaTools } from "./tools/piazza.js";
 import { PlanningTools } from "./study/src/planning.js";
 import { NotesTools } from "./study/src/notes.js";
 import { SyncTools } from "./study/src/sync.js";
+import { PiazzaTools } from "./study/src/piazza.js";
 
 function createServer(): McpServer {
   console.error("[INIT] createServer() called - starting MCP server initialization");
@@ -302,6 +303,35 @@ function createServer(): McpServer {
     PlanningTools.tasks_add.description,
     PlanningTools.tasks_add.schema,
     wrapToolHandler("task_add", PlanningTools.tasks_add.handler)
+  );
+
+  // Register Piazza study tools
+  server.tool(
+    "piazza_sync",
+    PiazzaTools.piazza_sync.description,
+    PiazzaTools.piazza_sync.schema,
+    wrapToolHandler("piazza_sync", PiazzaTools.piazza_sync.handler)
+  );
+
+  server.tool(
+    "piazza_embed_missing",
+    PiazzaTools.piazza_embed_missing.description,
+    PiazzaTools.piazza_embed_missing.schema,
+    wrapToolHandler("piazza_embed_missing", PiazzaTools.piazza_embed_missing.handler)
+  );
+
+  server.tool(
+    "piazza_semantic_search",
+    PiazzaTools.piazza_semantic_search.description,
+    PiazzaTools.piazza_semantic_search.schema,
+    wrapToolHandler("piazza_semantic_search", PiazzaTools.piazza_semantic_search.handler)
+  );
+
+  server.tool(
+    "piazza_suggest_for_item",
+    PiazzaTools.piazza_suggest_for_item.description,
+    PiazzaTools.piazza_suggest_for_item.schema,
+    wrapToolHandler("piazza_suggest_for_item", PiazzaTools.piazza_suggest_for_item.handler)
   );
 
   return server;

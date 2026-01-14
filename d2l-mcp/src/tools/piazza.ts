@@ -11,45 +11,47 @@ interface PiazzaToolDefinition {
   handler: (args: any) => Promise<string>;
 }
 
-async function fetchPiazza(endpoint: string, data: any): Promise<any> {
+async function fetchPiazza(method: string, params: Record<string, any>): Promise<any> {
   const cookieHeader = await getPiazzaCookieHeader();
   
-  const response = await fetch(`${PIAZZA_API}${endpoint}`, {
+  // Extract session_id from cookies to use as CSRF token
+  const sessionIdMatch = cookieHeader.match(/session_id=([^;]+)/);
+  const csrfToken = sessionIdMatch ? sessionIdMatch[1] : "";
+  
+  const response = await fetch(`${PIAZZA_API}?method=${encodeURIComponent(method)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Accept": "application/json, text/plain, */*",
       "Cookie": cookieHeader,
-      "CSRF-Token": "placeholder", // Piazza often needs this
+      "csrf-token": csrfToken,
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ method, params }),
   });
 
   if (!response.ok) {
     throw new Error(`Piazza API error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const json = await response.json();
+  if (json.error) {
+    throw new Error(`Piazza API error: ${json.error}`);
+  }
+  
+  return json;
 }
 
 // Get user's enrolled classes
 async function getUserClasses(): Promise<string> {
   try {
-    const result = await fetchPiazza("", {
-      method: "network.get_my_networks",
-      params: {},
-    });
-
-    const classes = result.result || [];
-    return JSON.stringify(
-      classes.map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        term: c.term,
-        status: c.status,
-      })),
-      null,
-      2
-    );
+    const result = await fetchPiazza("user_profile.get_profile", {});
+    
+    // The profile result contains user info - extract networks/classes from it
+    const profile = result.result || {};
+    
+    // Networks are typically in the profile or we need to parse from cookies
+    // Return the raw profile for now to see what's available
+    return JSON.stringify(profile, null, 2);
   } catch (error) {
     return `Error fetching Piazza classes: ${error instanceof Error ? error.message : String(error)}`;
   }
@@ -58,13 +60,10 @@ async function getUserClasses(): Promise<string> {
 // Get posts from a class
 async function getClassPosts(classId: string, limit: number = 20): Promise<string> {
   try {
-    const result = await fetchPiazza("", {
-      method: "network.get_posts",
-      params: {
-        nid: classId,
-        limit: limit,
-        offset: 0,
-      },
+    const result = await fetchPiazza("network.filter_feed", {
+      nid: classId,
+      limit: limit,
+      offset: 0,
     });
 
     const posts = result.result || [];
@@ -89,12 +88,9 @@ async function getClassPosts(classId: string, limit: number = 20): Promise<strin
 // Get a specific post with its content
 async function getPost(classId: string, postId: string): Promise<string> {
   try {
-    const result = await fetchPiazza("", {
-      method: "content.get",
-      params: {
-        cid: postId,
-        nid: classId,
-      },
+    const result = await fetchPiazza("content.get", {
+      cid: postId,
+      nid: classId,
     });
 
     const post = result.result;
@@ -127,12 +123,9 @@ async function getPost(classId: string, postId: string): Promise<string> {
 // Search posts in a class
 async function searchPosts(classId: string, query: string): Promise<string> {
   try {
-    const result = await fetchPiazza("", {
-      method: "network.search",
-      params: {
-        nid: classId,
-        query: query,
-      },
+    const result = await fetchPiazza("network.search", {
+      nid: classId,
+      query: query,
     });
 
     const posts = result.result || [];
