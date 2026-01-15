@@ -38,7 +38,7 @@ npm run build
 ### 2. Configure Environment
 
 ```bash
-cp .env.example .env
+cp .env.template .env
 ```
 
 Edit `.env` with your credentials:
@@ -198,6 +198,31 @@ Use the ngrok URL (e.g., `https://abc123.ngrok.io/mcp`) in any MCP client.
 | `PIAZZA_PASSWORD` | For Piazza | Piazza password |
 | `MCP_TRANSPORT` | No | `http` (default) or `stdio` |
 | `MCP_PORT` | No | Server port (default: 3000) |
+
+## Important: Private Mapping Files
+
+You must create and maintain two private mapping files (not tracked in git):
+
+- `src/study/db/notes_map.json`: Maps course IDs to the absolute paths of your notes PDFs. Required for notes sync.
+- `src/study/db/piazza_map.json`: Maps course IDs to Piazza class IDs (nids). Required for Piazza tools.
+
+**These files are in .gitignore for your privacy.**
+
+Example `notes_map.json`:
+```json
+{
+  "MATH119": ["/Users/yourname/Documents/MATH119/Notes.pdf"],
+  "ECE140": ["/Users/yourname/Documents/ECE140/ECE140Notes.pdf"]
+}
+```
+
+Example `piazza_map.json`:
+```json
+{
+  "ECE124": "mj0op591mef2vl",
+  "ECE140": "mjhga7avfwz39z"
+}
+```
 
 ## Session Management
 

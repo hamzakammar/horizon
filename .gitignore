@@ -6,3 +6,5 @@ node_modules/
 dist/
 *.tar.gz
 logs/
+src/study/db/notes_map.json
+src/study/db/piazza_map.json
