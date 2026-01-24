@@ -9,3 +9,8 @@ logs/
 src/study/db/notes_map.json
 src/study/db/piazza_map.json
 .mcp-sessions.json
+
+# SSH / bastion keys (never commit)
+*.pem
+*.ppk
+study-mcp-bastion-key.pem
