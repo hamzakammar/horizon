@@ -23,6 +23,7 @@ $$ language plpgsql;
 -- =========================================================
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
+  user_id text not null,                 -- Cognito sub or MCP_USER_ID
 
   -- provenance
   source text not null,                  -- 'learn' | 'manual' | etc.
@@ -42,9 +43,10 @@ create table if not exists public.tasks (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
 
-  constraint tasks_source_ref_unique unique (source, source_ref)
+  constraint tasks_user_source_ref_unique unique (user_id, source, source_ref)
 );
 
+create index if not exists idx_tasks_user on public.tasks(user_id);
 create index if not exists idx_tasks_course on public.tasks(course_id);
 create index if not exists idx_tasks_due    on public.tasks(due_at);
 create index if not exists idx_tasks_status on public.tasks(status);
@@ -62,15 +64,17 @@ alter table public.tasks disable row level security;
 -- =========================================================
 create table if not exists public.sync_state (
   id uuid primary key default gen_random_uuid(),
+  user_id text not null,
 
   source text not null,                  -- 'learn' | 'piazza' | 'notes'
   course_id text,                        -- null = global
   last_sync_at timestamptz not null default now(),
   cursor jsonb,                          -- pagination tokens, timestamps, etc.
 
-  constraint sync_state_unique unique (source, course_id)
+  constraint sync_state_user_unique unique (user_id, source, course_id)
 );
 
+create index if not exists idx_sync_state_user on public.sync_state(user_id);
 create index if not exists idx_sync_state_source on public.sync_state(source);
 create index if not exists idx_sync_state_course on public.sync_state(course_id);
 
@@ -78,16 +82,42 @@ alter table public.sync_state disable row level security;
 
 
 -- =========================================================
--- 3) NOTE SECTIONS (PDF chunks) + Embeddings
+-- 3) NOTES (app uploads: S3 key, title, status)
+-- =========================================================
+create table if not exists public.notes (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  s3_key text not null,
+  title text not null,
+  course_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  page_count int,
+  status text not null default 'processing'
+);
+
+create index if not exists idx_notes_user on public.notes(user_id);
+create index if not exists idx_notes_course on public.notes(course_id);
+create index if not exists idx_notes_status on public.notes(status);
+
+drop trigger if exists set_notes_updated_at on public.notes;
+create trigger set_notes_updated_at
+before update on public.notes
+for each row execute function public.set_updated_at();
+
+alter table public.notes disable row level security;
+
+
+-- =========================================================
+-- 4) NOTE SECTIONS (PDF chunks) + Embeddings
 --
--- Canonical columns used by your notes_sync code:
---   course_id, title, anchor, url, preview, content, embedding
---
--- If you previously had "file_path/section_title/start_line/end_line" etc,
--- we include them as OPTIONAL columns (nullable) for compatibility.
+-- Canonical columns: user_id, course_id, title, anchor, url, preview, content, embedding.
+-- note_id links to notes table when ingested via app upload.
 -- =========================================================
 create table if not exists public.note_sections (
   id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  note_id uuid references public.notes(id) on delete set null,
 
   course_id text not null,
 
@@ -110,9 +140,13 @@ create table if not exists public.note_sections (
   embedding vector(1536),
 
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+
+  constraint note_sections_user_course_anchor_unique unique (user_id, course_id, anchor)
 );
 
+create index if not exists idx_note_sections_user on public.note_sections(user_id);
+create index if not exists idx_note_sections_note on public.note_sections(note_id);
 create index if not exists idx_note_sections_course on public.note_sections(course_id);
 
 -- keyword search (optional)
@@ -131,14 +165,16 @@ for each row execute function public.set_updated_at();
 alter table public.note_sections disable row level security;
 
 
--- Semantic search RPC for note_sections
+-- Semantic search RPC for note_sections (user_filter = Cognito sub or MCP_USER_ID)
 create or replace function public.match_note_sections (
   query_embedding vector(1536),
   match_count int default 10,
-  course_filter text default null
+  course_filter text default null,
+  user_filter text default null
 )
 returns table (
   id uuid,
+  note_id uuid,
   course_id text,
   title text,
   url text,
@@ -150,6 +186,7 @@ language sql stable
 as $$
   select
     ns.id,
+    ns.note_id,
     ns.course_id,
     ns.title,
     ns.url,
@@ -158,6 +195,7 @@ as $$
     1 - (ns.embedding <=> query_embedding) as similarity
   from public.note_sections ns
   where ns.embedding is not null
+    and (user_filter is null or ns.user_id = user_filter)
     and (course_filter is null or ns.course_id = course_filter)
   order by ns.embedding <=> query_embedding
   limit match_count;
@@ -165,10 +203,11 @@ $$;
 
 
 -- =========================================================
--- 4) OFFICE HOURS
+-- 5) OFFICE HOURS
 -- =========================================================
 create table if not exists public.office_hours (
   id uuid primary key default gen_random_uuid(),
+  user_id text not null,
 
   course_id text not null,
   host text not null,                    -- 'TA' | 'prof' | name
@@ -182,6 +221,7 @@ create table if not exists public.office_hours (
   updated_at timestamptz not null default now()
 );
 
+create index if not exists idx_office_hours_user on public.office_hours(user_id);
 create index if not exists idx_office_hours_course on public.office_hours(course_id);
 
 drop trigger if exists set_office_hours_updated_at on public.office_hours;
@@ -193,10 +233,11 @@ alter table public.office_hours disable row level security;
 
 
 -- =========================================================
--- 5) PIAZZA POSTS + Embeddings
+-- 6) PIAZZA POSTS + Embeddings
 -- =========================================================
 create table if not exists public.piazza_posts (
   id uuid primary key default gen_random_uuid(),
+  user_id text not null,
 
   course_id text not null,
   post_id text not null,                 -- Piazza cid
@@ -211,9 +252,10 @@ create table if not exists public.piazza_posts (
 
   embedding vector(1536),
 
-  constraint piazza_posts_unique unique (course_id, post_id)
+  constraint piazza_posts_user_unique unique (user_id, course_id, post_id)
 );
 
+create index if not exists idx_piazza_posts_user on public.piazza_posts(user_id);
 create index if not exists idx_piazza_posts_course  on public.piazza_posts(course_id);
 create index if not exists idx_piazza_posts_created on public.piazza_posts(created_at);
 
@@ -223,11 +265,12 @@ create index if not exists idx_piazza_posts_embedding_hnsw
 alter table public.piazza_posts disable row level security;
 
 
--- Semantic search RPC for piazza_posts
+-- Semantic search RPC for piazza_posts (user_filter = Cognito sub or MCP_USER_ID)
 create or replace function public.match_piazza_posts (
   query_embedding vector(1536),
   match_count int default 10,
-  course_filter text default null
+  course_filter text default null,
+  user_filter text default null
 )
 returns table (
   id uuid,
@@ -250,6 +293,7 @@ as $$
     1 - (p.embedding <=> query_embedding) as similarity
   from public.piazza_posts p
   where p.embedding is not null
+    and (user_filter is null or p.user_id = user_filter)
     and (course_filter is null or p.course_id = course_filter)
   order by p.embedding <=> query_embedding
   limit match_count;

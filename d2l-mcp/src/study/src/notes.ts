@@ -4,6 +4,9 @@ import path from "node:path";
 import { homedir } from "node:os";
 import { createRequire } from "node:module";
 import { z } from "zod";
+
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text?: string; numpages?: number }>;
 import { OpenAI } from "openai";
 import { supabase } from "../../utils/supabase.js";
 import notesMap from "../db/notes_map.json" with { type: "json" };
@@ -74,17 +77,21 @@ function buildUrl(absolutePath: string, relativePath: string | null, webBase?: s
 	return absolutePath;
 }
 
+async function parsePdfBuffer(buffer: Buffer, logLabel = "PDF"): Promise<{ text: string; pageCount: number }> {
+	const data = await pdfParse(buffer);
+	const text = (data?.text || "") as string;
+	const pageCount = typeof data?.numpages === "number" ? data.numpages : 0;
+	console.error(`[${logLabel}] Extracted ${text.length} chars, ${pageCount} pages`);
+	return { text: normalizeWhitespace(text), pageCount };
+}
+
 async function parsePdfText(filePath: string): Promise<string> {
 	const buffer = await fs.readFile(filePath);
-	const require = createRequire(import.meta.url);
-	const pdfParse = require("pdf-parse");
-	const data = await pdfParse(buffer);
-	const text = data?.text || '';
-	console.error(`[PDF] Extracted ${text.length} characters from ${filePath}`);
+	const { text } = await parsePdfBuffer(buffer, "PDF");
 	if (!text) {
 		console.error(`[PDF] Warning: No text extracted from ${filePath}`);
 	}
-	return normalizeWhitespace(text);
+	return text;
 }
 
 async function insertNoteSections(rows: Array<Record<string, string>>): Promise<void> {
@@ -97,7 +104,7 @@ async function insertNoteSections(rows: Array<Record<string, string>>): Promise<
 	}
 }
 
-async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(text: string): Promise<number[]> {
 	const apiKey = process.env.OPENAI_API_KEY;
 	if (!apiKey) {
 		throw new Error("OPENAI_API_KEY environment variable is not set");
@@ -140,6 +147,79 @@ function calculateLexicalScore(section: any, queryWords: string[]): number {
 	return score;
 }
 
+export interface IngestPdfOptions {
+	courseId?: string;
+	title?: string;
+	noteId: string;
+	url?: string;
+}
+
+/** Ingest PDF buffer into note_sections (e.g. from S3). Returns chunkCount and pageCount. */
+export async function ingestPdfBuffer(
+	userId: string,
+	buffer: Buffer,
+	opts: IngestPdfOptions
+): Promise<{ chunkCount: number; pageCount: number }> {
+	const { courseId = "default", title = "Untitled PDF", noteId, url = "" } = opts;
+	const { text, pageCount } = await parsePdfBuffer(buffer, "INGEST");
+	const chunks = chunkText(text);
+	const slug = slugifyPdfName(title);
+	const rows: Array<Record<string, unknown>> = [];
+	chunks.forEach((chunk, idx) => {
+		rows.push({
+			user_id: userId,
+			note_id: noteId,
+			course_id: courseId,
+			title: `${title} — Chunk ${idx + 1}`,
+			anchor: `${noteId}-${slug}-chunk-${idx + 1}`,
+			url,
+			preview: chunk.slice(0, PREVIEW_LENGTH),
+			content: chunk,
+		});
+	});
+	if (rows.length === 0) return { chunkCount: 0, pageCount };
+
+	for (let i = 0; i < rows.length; i += INSERT_BATCH_SIZE) {
+		const batch = rows.slice(i, i + INSERT_BATCH_SIZE);
+		const { error } = await supabase.from("note_sections").upsert(batch, {
+			onConflict: "user_id,course_id,anchor",
+			ignoreDuplicates: false,
+		});
+		if (error) throw new Error(`ingest upsert failed: ${error.message}`);
+	}
+	return { chunkCount: rows.length, pageCount };
+}
+
+/** Embed note_sections for a given note_id. Used after ingest for app uploads. */
+export async function embedNoteSections(userId: string, noteId: string, minChars = 200): Promise<number> {
+	const { data: rows, error } = await supabase
+		.from("note_sections")
+		.select("id, content, preview")
+		.eq("user_id", userId)
+		.eq("note_id", noteId)
+		.is("embedding", null);
+
+	if (error) throw new Error(`embed fetch failed: ${error.message}`);
+	if (!rows?.length) return 0;
+
+	let embedded = 0;
+	for (const row of rows) {
+		const text = (row.content || row.preview || "") as string;
+		if (text.length < minChars) continue;
+		try {
+			const embedding = await generateEmbedding(text);
+			const { error: upErr } = await supabase
+				.from("note_sections")
+				.update({ embedding })
+				.eq("id", row.id);
+			if (!upErr) embedded++;
+		} catch (e) {
+			console.error(`[EMBED] Failed section ${row.id}:`, e);
+		}
+	}
+	return embedded;
+}
+
 export const NotesTools = {
 	notes_sync: {
 		description:
@@ -147,7 +227,7 @@ export const NotesTools = {
 		schema: {
 			courseId: z.string().optional().describe("Limit sync to a specific course ID (e.g., MATH119)."),
 		},
-		handler: async ({ courseId }: { courseId?: string }): Promise<string> => {
+		handler: async ({ courseId, userId }: { courseId?: string; userId: string }): Promise<string> => {
 			const map = notesMap as NotesMap;
 			const selectedCourses = courseId
 				? { [courseId]: map[courseId] }
@@ -199,6 +279,7 @@ export const NotesTools = {
 
 						chunks.forEach((chunk, idx) => {
 							rows.push({
+								user_id: userId,
 								course_id: course,
 								title: `${pdfName} — Chunk ${idx + 1}`,
 								anchor: `${pdfSlug}-chunk-${idx + 1}`,
@@ -222,14 +303,14 @@ export const NotesTools = {
 
 				if (rows.length > 0) {
 					// Use upsert instead of delete+insert to preserve embeddings for unchanged chunks
-					// This requires a unique constraint on (course_id, anchor) in the database
+					// Unique constraint: (user_id, course_id, anchor)
 					for (let i = 0; i < rows.length; i += INSERT_BATCH_SIZE) {
 						const batch = rows.slice(i, i + INSERT_BATCH_SIZE);
 						console.error(`[SYNC] Upserting batch ${Math.floor(i / INSERT_BATCH_SIZE) + 1}/${Math.ceil(rows.length / INSERT_BATCH_SIZE)} for ${course} (${batch.length} rows)`);
 						const { error: upsertError } = await supabase
 							.from("note_sections")
 							.upsert(batch, {
-								onConflict: "course_id,anchor",
+								onConflict: "user_id,course_id,anchor",
 								ignoreDuplicates: false,
 							});
 
@@ -283,7 +364,7 @@ export const NotesTools = {
 			topK: z.number().optional().describe("Number of top results to return. Defaults to 5."),
 			mode: z.enum(["lexical", "vector", "hybrid"]).optional().describe("Search mode: lexical (keyword), vector (semantic), or hybrid (both). Defaults to hybrid."),
 		},
-		handler: async ({ courseId, query, topK = 5, mode = "hybrid" }: { courseId: string; query: string; topK?: number; mode?: "lexical" | "vector" | "hybrid" }): Promise<string> => {
+		handler: async ({ courseId, query, topK = 5, mode = "hybrid", userId }: { courseId: string; query: string; topK?: number; mode?: "lexical" | "vector" | "hybrid"; userId: string }): Promise<string> => {
 			if (!courseId || !query) {
 				return JSON.stringify({ success: false, error: "Both courseId and query are required" }, null, 2);
 			}
@@ -296,6 +377,7 @@ export const NotesTools = {
 					const { data: sections, error } = await supabase
 						.from("note_sections")
 						.select("id, title, url, anchor, preview, content")
+						.eq("user_id", userId)
 						.eq("course_id", courseId);
 
 					if (error) {
@@ -312,9 +394,9 @@ export const NotesTools = {
 					}));
 
 					const topResults = scored
-						.sort((a, b) => b.score - a.score)
+						.sort((a: any, b: any) => b.score - a.score)
 						.slice(0, topK)
-						.map(({ id, score, content, ...rest }) => rest);
+						.map(({ id, score, content, ...rest }: any) => rest);
 
 					return JSON.stringify({ success: true, query, courseId, mode, count: topResults.length, results: topResults }, null, 2);
 				} else if (mode === "vector") {
@@ -324,6 +406,7 @@ export const NotesTools = {
 						query_embedding: queryEmbedding,
 						match_count: topK,
 						course_filter: courseId,
+						user_filter: userId,
 					});
 
 					if (error) {
@@ -347,6 +430,7 @@ export const NotesTools = {
 						query_embedding: queryEmbedding,
 						match_count: candidateCount,
 						course_filter: courseId,
+						user_filter: userId,
 					});
 
 					if (error) {
@@ -389,7 +473,7 @@ export const NotesTools = {
 			title: z.string().describe("The item title (e.g., 'Assignment: Calculus Integration')."),
 			description: z.string().optional().describe("Optional item description to include in search."),
 		},
-		handler: async ({ courseId, title, description }: { courseId: string; title: string; description?: string }): Promise<string> => {
+		handler: async ({ courseId, title, description, userId }: { courseId: string; title: string; description?: string; userId: string }): Promise<string> => {
 			if (!courseId || !title) {
 				return JSON.stringify({ success: false, error: "Both courseId and title are required" }, null, 2);
 			}
@@ -399,7 +483,7 @@ export const NotesTools = {
 
 			// Call notes_search with topK=3
 			const searchHandler = NotesTools.notes_search.handler;
-			return await searchHandler({ courseId, query, topK: 3 });
+			return await searchHandler({ courseId, query, topK: 3, userId });
 		},
 	},
 	notes_embed_missing: {
@@ -410,10 +494,15 @@ export const NotesTools = {
 			limit: z.number().optional().describe("Maximum rows to process in this batch. Defaults to 100."),
 			minChars: z.number().optional().describe("Skip chunks shorter than this. Defaults to 200."),
 		},
-		handler: async ({ courseId, limit = 100, minChars = 200 }: { courseId?: string; limit?: number; minChars?: number }): Promise<string> => {
+		handler: async ({ courseId, limit = 100, minChars = 200, userId }: { courseId?: string; limit?: number; minChars?: number; userId: string }): Promise<string> => {
 			try {
 				// Fetch rows with null embeddings
-				let query = supabase.from("note_sections").select("id, content, preview").is("embedding", null).limit(limit);
+				let query = supabase
+					.from("note_sections")
+					.select("id, content, preview")
+					.eq("user_id", userId)
+					.is("embedding", null)
+					.limit(limit);
 
 				if (courseId) {
 					query = query.eq("course_id", courseId);
@@ -479,6 +568,7 @@ export const NotesTools = {
 				let remainingQuery = supabase
 					.from("note_sections")
 					.select("id", { count: "exact", head: true })
+					.eq("user_id", userId)
 					.is("embedding", null);
 
 				if (courseId) {

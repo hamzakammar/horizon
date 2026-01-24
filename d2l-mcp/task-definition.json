@@ -1,0 +1,90 @@
+{
+  "family": "study-mcp-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::051140201449:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::051140201449:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "051140201449.dkr.ecr.us-east-1.amazonaws.com/study-mcp-backend:latest",
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "MCP_TRANSPORT",
+          "value": "http"
+        },
+        {
+          "name": "MCP_PORT",
+          "value": "3000"
+        },
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SUPABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-url-aL6yTm"
+        },
+        {
+          "name": "SUPABASE_SERVICE_ROLE_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-key-RHCXal"
+        },
+        {
+          "name": "COGNITO_USER_POOL_ID",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/cognito-pool-id-ikfCtk"
+        },
+        {
+          "name": "COGNITO_CLIENT_ID",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/cognito-client-id-uUgSsp"
+        },
+        {
+          "name": "S3_BUCKET",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/s3-bucket-KxRfoW"
+        },
+        {
+          "name": "AWS_REGION",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/aws-region-e14xXT"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/openai-key-iq9IEH"
+        },
+        {
+          "name": "D2L_HOST",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/d2l-host-1plQQx"
+        },
+        {
+          "name": "D2L_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/d2l-username-KfQFvB"
+        },
+        {
+          "name": "D2L_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/d2l-password-abTz46"
+        },
+        {
+          "name": "D2L_TOKEN",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/d2l-token-aYbbVr"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/study-mcp-backend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "essential": true
+    }
+  ]
+}

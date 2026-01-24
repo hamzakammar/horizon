@@ -31,6 +31,17 @@ function isLoginPage(url: string): boolean {
 export async function getToken(): Promise<string> {
   const authStartTime = Date.now();
 
+  // If D2L_TOKEN is provided via env var, use it directly (bypass browser auth)
+  const envToken = process.env.D2L_TOKEN;
+  if (envToken) {
+    console.error("[AUTH] Using D2L_TOKEN from environment variable");
+    tokenCache = {
+      token: envToken,
+      expiresAt: Date.now() + 82800000, // 23 hours
+    };
+    return envToken;
+  }
+
   // Return cached token if still valid (with 1 hour buffer for safety)
   if (tokenCache.token && Date.now() < tokenCache.expiresAt - 3600000) {
     const cacheTime = Date.now() - authStartTime;

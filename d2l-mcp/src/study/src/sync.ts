@@ -21,7 +21,7 @@ export const SyncTools = {
   sync_all: {
     description: `Sync all assignments from all enrolled courses on Learn and add them as tasks in the database`,
     schema: {},
-    handler: async () => {
+    handler: async ({ userId }: { userId: string }) => {
       try {
         console.log('[SYNC] Starting sync_all...');
         
@@ -64,10 +64,11 @@ export const SyncTools = {
                 // Use assignment ID as source_ref (unique identifier from D2L)
                 const sourceRef = `${orgUnitId}-${assignment.id}`;
                 
-                // Check if already exists by source_ref
+                // Check if already exists by user_id + source_ref
                 const { data: existing, error: selectError } = await supabase
                   .from('tasks')
                   .select('id')
+                  .eq('user_id', userId)
                   .eq('source_ref', sourceRef)
                   .maybeSingle();
 
@@ -75,17 +76,19 @@ export const SyncTools = {
 
                 if (!existing && !selectError) {
                   console.log(`[SYNC] Inserting new task: ${assignment.name} (source_ref: ${sourceRef})`);
-                  
-                  // Insert new task
+                  const courseId = String(orgUnitId);
+
+                  // Insert new task (schema: user_id, title, course_id, source, source_ref, due_at, status)
                   const { data, error } = await supabase
                     .from('tasks')
                     .insert({
+                      user_id: userId,
                       title: assignment.name,
-                      taskTitle: assignment.name,
-                      status: 'pending',
+                      course_id: courseId,
                       source: `d2l-${orgUnitId}`,
                       source_ref: sourceRef,
                       due_at: assignment.dueDate,
+                      status: 'open',
                     })
                     .select();
 

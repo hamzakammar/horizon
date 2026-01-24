@@ -1,10 +1,220 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import pg from 'pg';
+const { Pool } = pg;
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Support multiple env var names for flexibility
+const supabaseUrl = process.env.SUPABASE_URL || process.env.DATABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables: SUPABASE_URL and (SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY)');
+if (!supabaseUrl) {
+  throw new Error('Missing database URL: SUPABASE_URL or DATABASE_URL required');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: any;
+
+// If URL is postgresql:// (RDS), create a wrapper that uses pg pool
+if (supabaseUrl.startsWith('postgresql://')) {
+  const pool = new Pool({ 
+    connectionString: supabaseUrl,
+    ssl: { rejectUnauthorized: false } // RDS requires SSL
+  });
+  
+  // Create a Supabase-like client wrapper using pg pool
+  // This is a simplified version that handles the patterns used in the codebase
+  supabase = {
+    from: (table: string) => {
+      return {
+        select: (cols: string = '*') => {
+          let query = `SELECT ${cols} FROM ${table}`;
+          const params: any[] = [];
+          let paramIndex = 1;
+          
+          const builder: any = {
+            eq: (col: string, val: any) => {
+              if (params.length === 0) query += ` WHERE ${col} = $${paramIndex}`;
+              else query += ` AND ${col} = $${paramIndex}`;
+              params.push(val);
+              paramIndex++;
+              return builder;
+            },
+            ilike: (col: string, pattern: string) => {
+              if (params.length === 0) query += ` WHERE ${col} ILIKE $${paramIndex}`;
+              else query += ` AND ${col} ILIKE $${paramIndex}`;
+              params.push(pattern);
+              paramIndex++;
+              return builder;
+            },
+            lte: (col: string, val: any) => {
+              if (params.length === 0) query += ` WHERE ${col} <= $${paramIndex}`;
+              else query += ` AND ${col} <= $${paramIndex}`;
+              params.push(val);
+              paramIndex++;
+              return builder;
+            },
+            gte: (col: string, val: any) => {
+              if (params.length === 0) query += ` WHERE ${col} >= $${paramIndex}`;
+              else query += ` AND ${col} >= $${paramIndex}`;
+              params.push(val);
+              paramIndex++;
+              return builder;
+            },
+            is: (col: string, val: any) => {
+              if (params.length === 0) query += ` WHERE ${col} IS $${paramIndex}`;
+              else query += ` AND ${col} IS $${paramIndex}`;
+              params.push(val);
+              paramIndex++;
+              return builder;
+            },
+            limit: (n: number) => {
+              query += ` LIMIT $${paramIndex}`;
+              params.push(n);
+              paramIndex++;
+              return {
+                then: async (resolve: any) => {
+                  const result = await pool.query(query, params);
+                  resolve({ data: result.rows, error: null });
+                }
+              };
+            },
+            order: (col: string, opts: { ascending?: boolean } = {}) => {
+              const dir = opts.ascending !== false ? 'ASC' : 'DESC';
+              query += ` ORDER BY ${col} ${dir}`;
+              return {
+                then: async (resolve: any) => {
+                  const result = await pool.query(query, params);
+                  resolve({ data: result.rows, error: null });
+                }
+              };
+            },
+            then: async (resolve: any) => {
+              const result = await pool.query(query, params);
+              resolve({ data: result.rows, error: null });
+            }
+          };
+          return builder;
+        },
+        insert: (data: any) => {
+          const keys = Object.keys(data);
+          const vals = Object.values(data);
+          const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+          const insertQuery = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+          
+          return {
+            select: (cols: string = '*') => ({
+              then: async (resolve: any) => {
+                const result = await pool.query(insertQuery.replace('RETURNING *', `RETURNING ${cols}`), vals);
+                resolve({ data: result.rows, error: null });
+              }
+            }),
+            then: async (resolve: any) => {
+              const result = await pool.query(insertQuery, vals);
+              resolve({ data: result.rows, error: null });
+            }
+          };
+        },
+        upsert: (data: any, opts?: any) => {
+          const keys = Object.keys(data);
+          const vals = Object.values(data);
+          const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+          let onConflict = '';
+          if (opts?.onConflict) {
+            const conflictCols = Array.isArray(opts.onConflict) ? opts.onConflict.join(', ') : opts.onConflict;
+            const updateCols = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+            onConflict = ` ON CONFLICT (${conflictCols}) DO UPDATE SET ${updateCols}`;
+          }
+          
+          return {
+            then: async (resolve: any) => {
+              const result = await pool.query(`INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})${onConflict} RETURNING *`, vals);
+              resolve({ data: result.rows, error: null });
+            }
+          };
+        },
+        update: (data: any) => {
+          const keys = Object.keys(data);
+          const vals = Object.values(data);
+          const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+          let updateQuery = `UPDATE ${table} SET ${setClause}`;
+          const params: any[] = [...vals];
+          let paramIndex = keys.length + 1;
+          
+          return {
+            eq: (col: string, val: any) => {
+              updateQuery += ` WHERE ${col} = $${paramIndex}`;
+              params.push(val);
+              return {
+                select: (cols: string = '*') => ({
+                  then: async (resolve: any) => {
+                    const result = await pool.query(`${updateQuery} RETURNING ${cols}`, params);
+                    resolve({ data: result.rows, error: null });
+                  }
+                }),
+                then: async (resolve: any) => {
+                  const result = await pool.query(`${updateQuery} RETURNING *`, params);
+                  resolve({ data: result.rows, error: null });
+                }
+              };
+            },
+            then: async (resolve: any) => {
+              const result = await pool.query(`${updateQuery} RETURNING *`, params);
+              resolve({ data: result.rows, error: null });
+            }
+          };
+        },
+        delete: () => {
+          let deleteQuery = `DELETE FROM ${table}`;
+          const params: any[] = [];
+          let paramIndex = 1;
+          
+          return {
+            eq: (col: string, val: any) => {
+              deleteQuery += ` WHERE ${col} = $${paramIndex}`;
+              params.push(val);
+              return {
+                then: async (resolve: any) => {
+                  const result = await pool.query(`${deleteQuery} RETURNING *`, params);
+                  resolve({ data: result.rows, error: null });
+                }
+              };
+            },
+            then: async (resolve: any) => {
+              const result = await pool.query(`${deleteQuery} RETURNING *`, params);
+              resolve({ data: result.rows, error: null });
+            }
+          };
+        }
+      };
+    },
+    rpc: (fn: string, params: any) => {
+      return {
+        then: async (resolve: any, reject: any) => {
+          try {
+            if (fn === 'match_note_sections' || fn === 'match_piazza_posts') {
+              const result = await pool.query(`SELECT * FROM ${fn}($1, $2, $3, $4)`, [
+                params.query_embedding || null,
+                params.match_count || 10,
+                params.course_filter || null,
+                params.user_filter || null
+              ]);
+              resolve({ data: result.rows, error: null });
+            } else {
+              const result = await pool.query(`SELECT * FROM ${fn}($1)`, [params]);
+              resolve({ data: result.rows, error: null });
+            }
+          } catch (e: any) {
+            resolve({ data: null, error: e });
+          }
+        }
+      };
+    },
+    _pgPool: pool
+  };
+} else {
+  // For Supabase: use normal client
+  if (!supabaseKey) {
+    throw new Error('Missing Supabase key: SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY required for Supabase URLs');
+  }
+  supabase = createClient(supabaseUrl, supabaseKey);
+}
+
+export { supabase };

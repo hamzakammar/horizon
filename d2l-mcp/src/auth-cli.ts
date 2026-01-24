@@ -8,6 +8,15 @@ import "dotenv/config";
 import { getToken, getTokenExpiry } from "./auth.js";
 
 async function main() {
+  // If D2L_TOKEN is provided, skip browser auth
+  const d2lToken = process.env.D2L_TOKEN;
+  console.log(`[AUTH-CLI] D2L_TOKEN check: ${d2lToken ? 'FOUND (length: ' + d2lToken.length + ')' : 'NOT FOUND'}`);
+  if (d2lToken) {
+    console.log("D2L_TOKEN found in environment - skipping browser authentication");
+    console.log("Token will be used directly from environment variable");
+    return;
+  }
+
   const hasCredentials = process.env.D2L_USERNAME && process.env.D2L_PASSWORD;
 
   console.log("Starting D2L authentication...");
@@ -48,6 +57,12 @@ async function main() {
       console.error(
         "2. Try running without credentials to use browser-based login"
       );
+    } else {
+      console.error("");
+      console.error("D2L authentication is required. Please set:");
+      console.error("  - D2L_USERNAME");
+      console.error("  - D2L_PASSWORD");
+      console.error("  - D2L_HOST (optional, defaults to learn.ul.ie)");
     }
     process.exit(1);
   }

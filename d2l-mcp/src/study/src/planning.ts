@@ -1,8 +1,6 @@
-import { tokenHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/token.js";
-import {z} from "zod";
+import { z } from "zod";
 import { supabase } from "../../utils/supabase.js";
 import { NotesTools } from "./notes.js";
-import { uuidv4 } from "zod/v4/mini";
 
 export const PlanningTools = {
     tasks_list: {
@@ -13,36 +11,39 @@ export const PlanningTools = {
             source: z.string().optional().describe("Filter by task source"),
             dueBefore: z.string().optional().describe("Filter tasks due before this date (ISO 8601 format)"),
         },
-        handler: async (args: { taskTitle?: string; status?: "completed" | "pending"; source?: string; dueBefore?: string }): Promise<string> => {
-            const taskTitle = args.taskTitle; 
+        handler: async (args: { taskTitle?: string; status?: "completed" | "pending"; source?: string; dueBefore?: string; userId: string }): Promise<string> => {
+            const taskTitle = args.taskTitle;
             const status = args.status;
             const source = args.source;
             const dueBefore = args.dueBefore;
-            
+            const userId = args.userId;
+
             try {
                 let query = supabase
                     .from('tasks')
-                    .select('*');
-                
+                    .select('*')
+                    .eq('user_id', userId);
+
                 if (taskTitle) {
-                    query = query.ilike('taskTitle', `%${taskTitle}%`);
+                    query = query.ilike('title', `%${taskTitle}%`);
                 }
-                
+
                 if (status) {
-                    query = query.eq('status', status);
+                    const s = status === 'completed' ? 'done' : 'open';
+                    query = query.eq('status', s);
                 }
-                
+
                 if (source) {
                     query = query.eq('source', source);
                 }
-                
+
                 if (dueBefore) {
                     query = query.lte('due_at', dueBefore);
                 }
-                
+
                 // Order by due date
                 query = query.order('due_at', { ascending: true });
-                
+
                 const { data: tasks, error } = await query;
                 
                 if (error) {
@@ -73,20 +74,21 @@ export const PlanningTools = {
             source: z.string().optional().describe("Source of the task (e.g., 'manual', 'piazza', 'd2l')"),
             description: z.string().optional().describe("Optional description or details about the task"),
         },
-        handler: async (args: { taskTitle: string; courseId: string; dueAt: string; source?: string; description?: string }): Promise<string> => {
-            const { taskTitle, courseId, dueAt, source = 'manual', description } = args;
+        handler: async (args: { taskTitle: string; courseId: string; dueAt: string; source?: string; description?: string; userId: string }): Promise<string> => {
+            const { taskTitle, courseId, dueAt, source = 'manual', description, userId } = args;
 
             try {
                 const { data, error } = await supabase
                     .from('tasks')
                     .insert({
+                        user_id: userId,
                         title: taskTitle,
                         course_id: courseId,
                         due_at: dueAt,
-                        source: "manual",
-                        source_ref: `${source}:${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,   
-                        status: 'pending',
-                        description: description,
+                        source: 'manual',
+                        source_ref: `${source}:${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                        status: 'open',
+                        description: description ?? null,
                     })
                     .select();
                 
@@ -111,20 +113,18 @@ export const PlanningTools = {
             taskId: z.string().describe("The unique identifier of the task to mark as completed"),
             taskName: z.string().optional().describe("The name of the task to mark as completed"),
         },
-        handler: async (args: { taskId: string; taskName?: string }): Promise<string> => {
-            const taskId = args.taskId;
-            const taskName = args.taskName;
+        handler: async (args: { taskId: string; taskName?: string; userId: string }): Promise<string> => {
+            const { taskId, taskName, userId } = args;
 
             try {
-                const { data, error } = await supabase
+                const { error } = await supabase
                     .from('tasks')
-                    .update({ status: 'completed' })
-                    .eq('id', taskId);
-                
-                if (error) {
-                    throw error;
-                }
-                
+                    .update({ status: 'done' })
+                    .eq('id', taskId)
+                    .eq('user_id', userId);
+
+                if (error) throw error;
+
                 return `Task ${taskName ? `"${taskName}" ` : ''}with ID ${taskId} marked as completed.`;
             } catch (error) {
                 return `Error marking task as completed: ${error instanceof Error ? error.message : String(error)}`;
@@ -138,23 +138,25 @@ export const PlanningTools = {
             courseId: z.string().optional().describe("Filter tasks by course ID"),
             includeNotes: z.boolean().optional().describe("Whether to include notes in the plan, default is true"),
         },
-        handler: async (args: { windowDays?: number; courseId?: string; includeNotes?: boolean }): Promise<string> => {
+        handler: async (args: { windowDays?: number; courseId?: string; includeNotes?: boolean; userId: string }): Promise<string> => {
             const windowDays = args.windowDays ?? 7;
             const courseId = args.courseId;
             const includeNotes = args.includeNotes ?? true;
+            const userId = args.userId;
 
             try {
                 let query = supabase
                     .from('tasks')
                     .select('*')
+                    .eq('user_id', userId)
                     .gte('due_at', new Date().toISOString())
                     .lte('due_at', new Date(Date.now() + windowDays * 24 * 60 * 60 * 1000).toISOString())
-                    .eq('status', 'pending');
-                
+                    .eq('status', 'open');
+
                 if (courseId) {
                     query = query.eq('course_id', courseId);
                 }
-            
+
                 const { data: tasks, error } = await query.order('due_at', { ascending: true });
                 
                 if (error) {
@@ -179,7 +181,7 @@ export const PlanningTools = {
                     const dueDate = new Date(task.due_at);
                     const taskObj = {
                         id: task.id,
-                        title: task.taskTitle,
+                        title: task.title,
                         dueDate: task.due_at,
                         courseId: task.course_id,
                     };
@@ -200,7 +202,8 @@ export const PlanningTools = {
                         const notesResult = await NotesTools.notes_suggest_for_item.handler({
                             courseId: task.courseId,
                             title: task.title,
-                            description: undefined
+                            description: undefined,
+                            userId,
                         });
                         const notes = JSON.parse(notesResult);
                         enrichedDueSoon.push({

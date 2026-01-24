@@ -22,10 +22,13 @@ import { PlanningTools } from "./study/src/planning.js";
 import { NotesTools } from "./study/src/notes.js";
 import { SyncTools } from "./study/src/sync.js";
 import { PiazzaTools } from "./study/src/piazza.js";
+import { getUserId } from "./utils/userContext.js";
+import { authMiddleware } from "./api/auth.js";
+import apiRoutes from "./api/routes.js";
 
 function createServer(): McpServer {
   console.error("[INIT] createServer() called - starting MCP server initialization");
-  
+
   const server = new McpServer({
     name: "study-mcp",
     version: "1.0.0",
@@ -56,6 +59,17 @@ function createServer(): McpServer {
         throw error;
       }
     };
+  };
+
+  // Study tools: inject userId from MCP_USER_ID (or 'legacy') on each request
+  const wrapStudyToolHandler = (
+    toolName: string,
+    handler: (args: any) => Promise<string>
+  ) => {
+    return wrapToolHandler(toolName, async (args: any) => {
+      const userId = getUserId();
+      return handler({ ...args, userId });
+    });
   };
 
   // Register assignment tools
@@ -282,97 +296,97 @@ function createServer(): McpServer {
     );
   });
 
-  // Register Planning tools
+  // Register Planning tools (multi-user: userId injected from MCP_USER_ID)
   server.tool(
     "tasks_list",
     PlanningTools.tasks_list.description,
     PlanningTools.tasks_list.schema,
-    wrapToolHandler("tasks_list", PlanningTools.tasks_list.handler)
+    wrapStudyToolHandler("tasks_list", PlanningTools.tasks_list.handler)
   );
 
   server.tool(
     "tasks_complete",
     PlanningTools.tasks_complete.description,
     PlanningTools.tasks_complete.schema,
-    wrapToolHandler("tasks_complete", PlanningTools.tasks_complete.handler)
+    wrapStudyToolHandler("tasks_complete", PlanningTools.tasks_complete.handler)
   );
 
   server.tool(
     "notes_sync",
     NotesTools.notes_sync.description,
     NotesTools.notes_sync.schema,
-    wrapToolHandler("notes_sync", NotesTools.notes_sync.handler)
+    wrapStudyToolHandler("notes_sync", NotesTools.notes_sync.handler)
   );
 
   server.tool(
     "notes_search",
     NotesTools.notes_search.description,
     NotesTools.notes_search.schema,
-    wrapToolHandler("notes_search", NotesTools.notes_search.handler)
+    wrapStudyToolHandler("notes_search", NotesTools.notes_search.handler)
   );
 
   server.tool(
     "notes_suggest_for_item",
     NotesTools.notes_suggest_for_item.description,
     NotesTools.notes_suggest_for_item.schema,
-    wrapToolHandler("notes_suggest_for_item", NotesTools.notes_suggest_for_item.handler)
+    wrapStudyToolHandler("notes_suggest_for_item", NotesTools.notes_suggest_for_item.handler)
   );
 
   server.tool(
     "notes_embed_missing",
     NotesTools.notes_embed_missing.description,
     NotesTools.notes_embed_missing.schema,
-    wrapToolHandler("notes_embed_missing", NotesTools.notes_embed_missing.handler)
+    wrapStudyToolHandler("notes_embed_missing", NotesTools.notes_embed_missing.handler)
   );
 
   server.tool(
     "sync_all",
     SyncTools.sync_all.description,
     SyncTools.sync_all.schema,
-    wrapToolHandler("sync_all", SyncTools.sync_all.handler)
+    wrapStudyToolHandler("sync_all", SyncTools.sync_all.handler)
   );
 
   server.tool(
     "plan_week",
     PlanningTools.plan_week.description,
     PlanningTools.plan_week.schema,
-    wrapToolHandler("plan_week", PlanningTools.plan_week.handler)
-  )
+    wrapStudyToolHandler("plan_week", PlanningTools.plan_week.handler)
+  );
 
   server.tool(
     "tasks_add",
     PlanningTools.tasks_add.description,
     PlanningTools.tasks_add.schema,
-    wrapToolHandler("task_add", PlanningTools.tasks_add.handler)
+    wrapStudyToolHandler("tasks_add", PlanningTools.tasks_add.handler)
   );
 
-  // Register Piazza study tools
+  // Register Piazza study tools (multi-user: userId injected from MCP_USER_ID)
   server.tool(
     "piazza_sync",
     PiazzaTools.piazza_sync.description,
     PiazzaTools.piazza_sync.schema,
-    wrapToolHandler("piazza_sync", PiazzaTools.piazza_sync.handler)
+    wrapStudyToolHandler("piazza_sync", PiazzaTools.piazza_sync.handler)
   );
 
   server.tool(
     "piazza_embed_missing",
     PiazzaTools.piazza_embed_missing.description,
     PiazzaTools.piazza_embed_missing.schema,
-    wrapToolHandler("piazza_embed_missing", PiazzaTools.piazza_embed_missing.handler)
+    wrapStudyToolHandler("piazza_embed_missing", PiazzaTools.piazza_embed_missing.handler)
   );
 
   server.tool(
     "piazza_semantic_search",
     PiazzaTools.piazza_semantic_search.description,
     PiazzaTools.piazza_semantic_search.schema,
-    wrapToolHandler("piazza_semantic_search", PiazzaTools.piazza_semantic_search.handler)
+    wrapStudyToolHandler("piazza_semantic_search", PiazzaTools.piazza_semantic_search.handler)
   );
 
   server.tool(
     "piazza_suggest_for_item",
     PiazzaTools.piazza_suggest_for_item.description,
     PiazzaTools.piazza_suggest_for_item.schema,
-    wrapToolHandler("piazza_suggest_for_item", PiazzaTools.piazza_suggest_for_item.handler)
+    wrapStudyToolHandler("piazza_suggest_for_item", PiazzaTools.piazza_suggest_for_item.handler)
   );
 
   return server;
@@ -401,6 +415,12 @@ async function main() {
         exposedHeaders: ["Mcp-Session-Id"],
       })
     );
+
+    // Health check (no auth) for ALB / load balancers
+    app.get("/health", (_req, res) => res.json({ ok: true }));
+
+    // REST API (app-first): /api/notes, /api/search, /api/dashboard
+    app.use("/api", authMiddleware, apiRoutes);
 
     // Map to store transports by session ID
     const transports: Record<string, StreamableHTTPServerTransport> = {};
