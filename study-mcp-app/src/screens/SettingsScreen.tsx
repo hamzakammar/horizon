@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { AntDesign } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { d2lService } from '../services/d2l';
 import { piazzaService } from '../services/piazza';
@@ -41,7 +42,11 @@ export default function SettingsScreen() {
   // Reload status when screen comes into focus (e.g., after connecting)
   useFocusEffect(
     React.useCallback(() => {
-      loadIntegrationStatus();
+      // Small delay to ensure backend has processed the connection
+      const timer = setTimeout(() => {
+        loadIntegrationStatus();
+      }, 500);
+      return () => clearTimeout(timer);
     }, [])
   );
 
@@ -129,7 +134,10 @@ export default function SettingsScreen() {
         {/* D2L Integration */}
         <View style={styles.integrationCard}>
           <View style={styles.integrationHeader}>
-            <Text style={styles.integrationName}>D2L Brightspace</Text>
+            <View style={styles.integrationTitleContainer}>
+              <AntDesign name="book" size={20} color="#6366f1" style={{ marginRight: 10 }} />
+              <Text style={styles.integrationName}>D2L Brightspace</Text>
+            </View>
             <View style={styles.statusBadge}>
               <View
                 style={[
@@ -151,6 +159,7 @@ export default function SettingsScreen() {
           <View style={styles.integrationActions}>
             {!d2lStatus.connected ? (
               <TouchableOpacity style={styles.connectButton} onPress={handleD2LConnect}>
+                <AntDesign name="link" size={16} color="#fff" style={{ marginRight: 6 }} />
                 <Text style={styles.connectButtonText}>Connect</Text>
               </TouchableOpacity>
             ) : (
@@ -162,7 +171,10 @@ export default function SettingsScreen() {
                 {d2lStatus.syncing ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.syncButtonText}>Sync Now</Text>
+                  <>
+                    <AntDesign name="sync" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.syncButtonText}>Sync Now</Text>
+                  </>
                 )}
               </TouchableOpacity>
             )}
@@ -172,7 +184,10 @@ export default function SettingsScreen() {
         {/* Piazza Integration */}
         <View style={styles.integrationCard}>
           <View style={styles.integrationHeader}>
-            <Text style={styles.integrationName}>Piazza</Text>
+            <View style={styles.integrationTitleContainer}>
+              <AntDesign name="message" size={20} color="#6366f1" style={{ marginRight: 10 }} />
+              <Text style={styles.integrationName}>Piazza</Text>
+            </View>
             <View style={styles.statusBadge}>
               <View
                 style={[
@@ -194,6 +209,7 @@ export default function SettingsScreen() {
           <View style={styles.integrationActions}>
             {!piazzaStatus.connected ? (
               <TouchableOpacity style={styles.connectButton} onPress={handlePiazzaConnect}>
+                <AntDesign name="link" size={16} color="#fff" style={{ marginRight: 6 }} />
                 <Text style={styles.connectButtonText}>Connect</Text>
               </TouchableOpacity>
             ) : (
@@ -205,7 +221,10 @@ export default function SettingsScreen() {
                 {piazzaStatus.syncing ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.syncButtonText}>Sync Now</Text>
+                  <>
+                    <AntDesign name="sync" size={16} color="#fff" style={{ marginRight: 6 }} />
+                    <Text style={styles.syncButtonText}>Sync Now</Text>
+                  </>
                 )}
               </TouchableOpacity>
             )}
@@ -216,7 +235,10 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notes</Text>
         <TouchableOpacity style={styles.actionButton} onPress={handleEmbedMissing}>
-          <Text style={styles.actionButtonText}>Embed Missing Notes</Text>
+          <View style={styles.actionButtonHeader}>
+            <AntDesign name="file-text" size={18} color="#6366f1" style={{ marginRight: 10 }} />
+            <Text style={styles.actionButtonText}>Embed Missing Notes</Text>
+          </View>
           <Text style={styles.actionButtonSubtext}>
             Generate embeddings for notes that haven't been processed
           </Text>
@@ -238,7 +260,10 @@ export default function SettingsScreen() {
             ]);
           }}
         >
-          <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Sign Out</Text>
+          <View style={styles.actionButtonHeader}>
+            <AntDesign name="poweroff" size={18} color="#ef4444" style={{ marginRight: 10 }} />
+            <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Sign Out</Text>
+          </View>
         </TouchableOpacity>
       </View>
       </ScrollView>
@@ -250,6 +275,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  scrollView: {
+    flex: 1,
   },
   header: {
     paddingTop: 8,
@@ -299,6 +327,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  integrationTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   integrationName: {
     fontSize: 18,
     fontWeight: '600',
@@ -345,10 +377,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   connectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#6366f1',
     borderRadius: 12,
     padding: 14,
-    alignItems: 'center',
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -361,10 +395,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   syncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#10b981',
     borderRadius: 12,
     padding: 14,
-    alignItems: 'center',
     shadowColor: '#10b981',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -392,10 +428,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  actionButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   actionButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 6,
     color: '#1e293b',
   },
   actionButtonSubtext: {

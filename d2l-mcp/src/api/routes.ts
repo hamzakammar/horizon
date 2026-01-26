@@ -307,13 +307,9 @@ router.post("/d2l/connect", async (req: Request, res: Response) => {
   }
 
   try {
-    // Store credentials in database (encrypted in production)
-    // For now, we'll store them in a user_credentials table or use environment variables per user
-    // Since the backend uses env vars, we'll need to update the auth.ts to support per-user credentials
-    // For MVP, we'll store them and the backend will need to be updated to use them
-    
-    // Store in a simple table for now (you may want to encrypt these)
-    const { error } = await supabase
+    // First, verify credentials by attempting to authenticate
+    // Temporarily store credentials to test authentication
+    const { error: tempError } = await supabase
       .from("user_credentials")
       .upsert({
         user_id: userId,
@@ -326,16 +322,47 @@ router.post("/d2l/connect", async (req: Request, res: Response) => {
         onConflict: "user_id,service"
       });
 
-    if (error) {
-      console.error("[API] d2l/connect error:", error);
+    if (tempError) {
+      console.error("[API] d2l/connect error storing temp credentials:", tempError);
       res.status(500).json({ error: "Failed to store credentials" });
       return;
     }
 
-    res.json({ 
-      status: "connected",
-      message: "D2L credentials stored successfully"
-    });
+    // Now try to authenticate with D2L to verify credentials work
+    try {
+      const client = new D2LClient(userId, host);
+      // Try to get enrollments as a test - this will trigger authentication
+      await client.getMyEnrollments();
+      
+      // If we get here, authentication succeeded
+      res.json({ 
+        status: "connected",
+        message: "D2L credentials verified and stored successfully"
+      });
+    } catch (authError) {
+      // Authentication failed - remove the credentials we just stored
+      await supabase
+        .from("user_credentials")
+        .delete()
+        .eq("user_id", userId)
+        .eq("service", "d2l");
+      
+      console.error("[API] d2l/connect authentication failed:", authError);
+      const errorMessage = authError instanceof Error ? authError.message : String(authError);
+      
+      // Provide user-friendly error messages
+      if (errorMessage.includes("login") || errorMessage.includes("password") || errorMessage.includes("credentials")) {
+        res.status(401).json({ 
+          error: "Invalid D2L credentials. Please check your username and password.",
+          details: errorMessage
+        });
+      } else {
+        res.status(500).json({ 
+          error: "Failed to authenticate with D2L",
+          details: errorMessage
+        });
+      }
+    }
   } catch (e) {
     console.error("[API] d2l/connect error:", e);
     res.status(500).json({ error: "Failed to connect", details: e instanceof Error ? e.message : String(e) });
@@ -346,9 +373,15 @@ router.post("/d2l/connect", async (req: Request, res: Response) => {
 router.get("/d2l/status", async (req: Request, res: Response) => {
   const userId = req.userId!;
   try {
-    // Try to get a token to check if D2L is authenticated
-    const token = await getToken(userId);
-    const connected = !!token;
+    // Check if credentials exist in database
+    const { data: creds, error: credError } = await supabase
+      .from("user_credentials")
+      .select("host, username, updated_at")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .single();
+    
+    const connected = !credError && !!creds && !!creds.username;
 
     // Get last sync time from tasks table
     const { data: lastTask } = await supabase
@@ -360,25 +393,18 @@ router.get("/d2l/status", async (req: Request, res: Response) => {
       .limit(1)
       .single();
 
-    // Get courses count
+    // Get courses count (optional - don't fail if this doesn't work)
     let coursesCount = 0;
-    if (connected) {
+    if (connected && creds) {
       try {
-        // Get user's D2L host from credentials
-        const { data: creds } = await supabase
-          .from("user_credentials")
-          .select("host")
-          .eq("user_id", userId)
-          .eq("service", "d2l")
-          .single();
-        
-        const client = new D2LClient(userId, creds?.host);
+        const client = new D2LClient(userId, creds.host);
         const enrollments = await client.getMyEnrollments() as { Items: any[] };
         coursesCount = enrollments?.Items?.filter(
           (e: any) => e.OrgUnit?.Type?.Code === "Course Offering" && e.Access?.IsActive && e.Access?.CanAccess
         ).length || 0;
       } catch (e) {
-        // Ignore errors getting courses
+        // Ignore errors getting courses - credentials might be valid but not authenticated yet
+        console.error("[API] Error getting courses count:", e);
       }
     }
 
@@ -461,6 +487,41 @@ router.get("/d2l/courses", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[API] d2l/courses error:", e);
     res.status(500).json({ error: "Failed to fetch courses", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** GET /api/d2l/courses/:courseId/announcements — Get announcements for a course */
+router.get("/d2l/courses/:courseId/announcements", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { courseId } = req.params;
+  const orgUnitId = parseInt(courseId, 10);
+
+  if (isNaN(orgUnitId)) {
+    res.status(400).json({ error: "Invalid course ID" });
+    return;
+  }
+
+  try {
+    // Get user's D2L host from credentials
+    const { data: creds } = await supabase
+      .from("user_credentials")
+      .select("host")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .single();
+    
+    const client = new D2LClient(userId, creds?.host);
+    const news = await client.getNews(orgUnitId) as any[];
+    const { marshalAnnouncements } = await import("../utils/marshal.js");
+    const announcements = marshalAnnouncements(news);
+
+    res.json({ announcements });
+  } catch (e) {
+    console.error("[API] d2l/courses/:courseId/announcements error:", e);
+    res.status(500).json({ 
+      error: "Failed to fetch announcements", 
+      details: e instanceof Error ? e.message : String(e) 
+    });
   }
 });
 
@@ -548,9 +609,24 @@ router.post("/piazza/connect", async (req: Request, res: Response) => {
 router.get("/piazza/status", async (req: Request, res: Response) => {
   const userId = req.userId!;
   try {
-    // Try to get Piazza cookie to check if authenticated
-    const cookieHeader = await getPiazzaCookieHeader(userId);
-    const connected = !!cookieHeader;
+    // Check if credentials exist in database
+    const { data: creds, error: credError } = await supabase
+      .from("user_credentials")
+      .select("email, updated_at")
+      .eq("user_id", userId)
+      .eq("service", "piazza")
+      .single();
+    
+    // Also try to get cookie to see if actually authenticated
+    let cookieHeader: string | null = null;
+    try {
+      cookieHeader = await getPiazzaCookieHeader(userId);
+    } catch (e) {
+      // Ignore - might not be authenticated yet
+    }
+    
+    // Connected if credentials exist (even if not authenticated yet)
+    const connected = !credError && !!creds && !!creds.email;
 
     // Get last sync time from piazza_posts table
     const { data: lastPost } = await supabase

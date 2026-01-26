@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { AntDesign } from '@expo/vector-icons';
 import { notesService } from '../services/notes';
 import { Note } from '../types';
 
@@ -71,7 +72,8 @@ export default function NotesScreen() {
             navigation.navigate('Upload');
           }}
         >
-          <Text style={styles.uploadButtonText}>+ Upload</Text>
+          <AntDesign name="plus" size={16} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.uploadButtonText}>Upload</Text>
         </TouchableOpacity>
       </View>
 
@@ -88,7 +90,7 @@ export default function NotesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={styles.centerContainer}>
-              <Text style={{ fontSize: 48, marginBottom: 16 }}>📭</Text>
+              <AntDesign name="mail" size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
               <Text style={styles.emptyText}>No notes yet</Text>
               <Text style={styles.emptySubtext}>Upload your first note to get started</Text>
             </View>
@@ -121,6 +123,8 @@ const styles = StyleSheet.create({
     color: '#1e293b',
   },
   uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#6366f1',
     paddingHorizontal: 20,
     paddingVertical: 10,

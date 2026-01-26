@@ -2,11 +2,9 @@ import axios from 'axios';
 import { authService } from '../services/auth';
 
 // Get API URL from environment or use defaults
-// In production, always use https://api.hamzaammar.ca
-// In dev, use localhost unless EXPO_PUBLIC_API_BASE_URL is set
+// Default to production AWS backend
 const API_BASE_URL = 
-  process.env.EXPO_PUBLIC_API_BASE_URL ||
-  (__DEV__ ? 'http://localhost:3000' : 'https://api.hamzaammar.ca');
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.hamzaammar.ca';
 
 // Always log the API URL for debugging
 console.log('[API] Base URL:', API_BASE_URL);
@@ -26,6 +24,10 @@ apiClient.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
+    baseURL: config.baseURL,
+    hasToken: !!token,
+  });
   return config;
 });
 

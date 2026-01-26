@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 
 export default function SignUpScreen() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,7 +21,7 @@ export default function SignUpScreen() {
   const navigation = useNavigation();
 
   const handleSignUp = async () => {
-    if (!email || !password || !confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -37,7 +38,7 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      await signUp(email, password);
+      await signUp(email, password, name);
       // Navigation will be handled by the navigator based on auth state
     } catch (error: any) {
       // Check if error is about email verification needed
@@ -57,6 +58,15 @@ export default function SignUpScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>Sign up to get started</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Display Name"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        autoComplete="name"
+      />
 
       <TextInput
         style={styles.input}

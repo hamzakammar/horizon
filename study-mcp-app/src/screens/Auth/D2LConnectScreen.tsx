@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { AntDesign } from '@expo/vector-icons';
 import { d2lService } from '../../services/d2l';
 
 export default function D2LConnectScreen() {
@@ -20,6 +21,8 @@ export default function D2LConnectScreen() {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
 
+  const [statusMessage, setStatusMessage] = useState<string>('');
+
   const handleConnect = async () => {
     if (!host || !username || !password) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -27,20 +30,44 @@ export default function D2LConnectScreen() {
     }
 
     setLoading(true);
+    setStatusMessage('Storing credentials...');
     try {
+      setStatusMessage('Verifying credentials with D2L...\nThis may take 30-60 seconds...');
       await d2lService.connect({ host, username, password });
+      setStatusMessage('');
       Alert.alert(
         'Success',
-        'D2L connected successfully! You can now sync your courses and assignments.',
+        'D2L connected and verified successfully! You can now sync your courses and announcements.',
         [
           {
             text: 'OK',
-            onPress: () => navigation.goBack(),
+            onPress: () => {
+              // Small delay to ensure backend has processed
+              setTimeout(() => {
+                navigation.goBack();
+              }, 300);
+            },
           },
         ]
       );
     } catch (error: any) {
-      Alert.alert('Connection Failed', error.message || 'Failed to connect to D2L');
+      setStatusMessage('');
+      const errorMsg = error.message || 'Failed to connect to D2L';
+      if (errorMsg.includes('Invalid') || errorMsg.includes('credentials')) {
+        Alert.alert(
+          'Authentication Failed',
+          'The username or password you entered is incorrect. Please check your credentials and try again.',
+          [{ text: 'OK' }]
+        );
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('ECONNRESET')) {
+        Alert.alert(
+          'Connection Timeout',
+          'The authentication process took too long. This might be due to network issues or D2L being slow. Please try again.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Connection Failed', errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -95,15 +122,28 @@ export default function D2LConnectScreen() {
             />
           </View>
 
+          {statusMessage ? (
+            <View style={styles.statusContainer}>
+              <ActivityIndicator size="small" color="#6366f1" style={{ marginRight: 8 }} />
+              <Text style={styles.statusText}>{statusMessage}</Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleConnect}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <>
+                <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>Connecting...</Text>
+              </>
             ) : (
-              <Text style={styles.buttonText}>Connect</Text>
+              <>
+                <AntDesign name="link" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>Connect</Text>
+              </>
             )}
           </TouchableOpacity>
 
@@ -177,10 +217,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#6366f1',
     borderRadius: 12,
     padding: 18,
-    alignItems: 'center',
     marginTop: 8,
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },
@@ -213,6 +255,22 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 14,
     color: '#64748b',
+    lineHeight: 20,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  statusText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#4338ca',
     lineHeight: 20,
   },
 });

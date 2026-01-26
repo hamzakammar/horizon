@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AntDesign } from '@expo/vector-icons';
 import { searchService } from '../services/search';
 import { SearchHit } from '../types';
 
@@ -51,14 +52,17 @@ export default function SearchScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search your notes..."
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
+        <View style={styles.searchInputContainer}>
+          <AntDesign name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search your notes..."
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+        </View>
         <TouchableOpacity
           style={[styles.searchButton, loading && styles.searchButtonDisabled]}
           onPress={handleSearch}
@@ -67,7 +71,10 @@ export default function SearchScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={styles.searchButtonText}>Search</Text>
+            <>
+              <AntDesign name="search" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.searchButtonText}>Search</Text>
+            </>
           )}
         </TouchableOpacity>
       </View>
@@ -108,17 +115,28 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
     gap: 12,
   },
-  searchInput: {
+  searchInputContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
     backgroundColor: '#f8fafc',
+  },
+  searchIcon: {
+    marginLeft: 14,
+  },
+  searchInput: {
+    flex: 1,
+    padding: 14,
+    paddingLeft: 8,
+    fontSize: 16,
     color: '#1e293b',
   },
   searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#6366f1',
     paddingHorizontal: 24,
     paddingVertical: 14,

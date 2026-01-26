@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { AntDesign } from '@expo/vector-icons';
 import { piazzaService } from '../../services/piazza';
 
 export default function PiazzaConnectScreen() {
@@ -35,7 +36,12 @@ export default function PiazzaConnectScreen() {
         [
           {
             text: 'OK',
-            onPress: () => navigation.goBack(),
+            onPress: () => {
+              // Small delay to ensure backend has processed
+              setTimeout(() => {
+                navigation.goBack();
+              }, 300);
+            },
           },
         ]
       );
@@ -94,7 +100,10 @@ export default function PiazzaConnectScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Connect</Text>
+              <>
+                <AntDesign name="link" size={18} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>Connect</Text>
+              </>
             )}
           </TouchableOpacity>
 
@@ -179,10 +188,12 @@ const styles = StyleSheet.create({
     color: '#1e293b',
   },
   button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#6366f1',
     borderRadius: 12,
     padding: 18,
-    alignItems: 'center',
     marginTop: 8,
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { AntDesign } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { notesService } from '../services/notes';
 
@@ -112,6 +113,12 @@ export default function UploadScreen() {
       <View style={styles.section}>
         <Text style={styles.label}>File</Text>
         <TouchableOpacity style={styles.fileButton} onPress={pickDocument}>
+          <AntDesign 
+            name={file && !file.canceled && file.assets && file.assets[0] ? "file-text" : "cloud-upload"} 
+            size={24} 
+            color="#6366f1" 
+            style={{ marginBottom: 8 }} 
+          />
           <Text style={styles.fileButtonText}>
             {file && !file.canceled && file.assets && file.assets[0]
               ? file.assets[0].name
@@ -152,7 +159,10 @@ export default function UploadScreen() {
         {uploading || processing ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.uploadButtonText}>Upload & Process</Text>
+          <>
+            <AntDesign name="upload" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.uploadButtonText}>Upload & Process</Text>
+          </>
         )}
       </TouchableOpacity>
 
@@ -203,6 +213,8 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     backgroundColor: '#f8fafc',
+    minHeight: 120,
+    justifyContent: 'center',
   },
   fileButtonText: {
     color: '#6366f1',
@@ -210,10 +222,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#6366f1',
     borderRadius: 12,
     padding: 18,
-    alignItems: 'center',
     marginTop: 24,
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },

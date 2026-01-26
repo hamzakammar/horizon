@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AntDesign } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/Auth/LoginScreen';
 import SignUpScreen from '../screens/Auth/SignUpScreen';
@@ -14,6 +15,8 @@ import NotesScreen from '../screens/NotesScreen';
 import SearchScreen from '../screens/SearchScreen';
 import UploadScreen from '../screens/UploadScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import CoursesScreen from '../screens/CoursesScreen';
+import CourseDetailScreen from '../screens/CourseDetailScreen';
 import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createNativeStackNavigator();
@@ -32,14 +35,17 @@ function MainTabs() {
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
           borderTopColor: '#e2e8f0',
-          paddingTop: 8,
-          paddingBottom: Math.max(insets.bottom, 8),
-          height: 56 + Math.max(insets.bottom - 8, 0),
+          paddingTop: 12,
+          paddingBottom: Math.max(insets.bottom, 12),
+          height: 70 + Math.max(insets.bottom - 8, 0),
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',
           marginBottom: 4,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
         },
       }}
     >
@@ -48,6 +54,9 @@ function MainTabs() {
         component={DashboardScreen}
         options={{
           tabBarLabel: 'Dashboard',
+          tabBarIcon: ({ color, size }) => (
+            <AntDesign name="home" size={22} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -55,6 +64,9 @@ function MainTabs() {
         component={NotesScreen}
         options={{
           tabBarLabel: 'Notes',
+          tabBarIcon: ({ color, size }) => (
+            <AntDesign name="book" size={22} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -62,6 +74,9 @@ function MainTabs() {
         component={SearchScreen}
         options={{
           tabBarLabel: 'Search',
+          tabBarIcon: ({ color, size }) => (
+            <AntDesign name="search" size={22} color={color} />
+          ),
         }}
       />
       <Tab.Screen
@@ -69,6 +84,9 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Settings',
+          tabBarIcon: ({ color, size }) => (
+            <AntDesign name="setting" size={22} color={color} />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -115,6 +133,22 @@ export default function AppNavigator() {
               options={{
                 headerShown: true,
                 title: 'Connect Piazza',
+              }}
+            />
+            <Stack.Screen
+              name="Courses"
+              component={CoursesScreen}
+              options={{
+                headerShown: true,
+                title: 'My Courses',
+              }}
+            />
+            <Stack.Screen
+              name="CourseDetail"
+              component={CourseDetailScreen}
+              options={{
+                headerShown: true,
+                title: 'Course Details',
               }}
             />
           </>

@@ -531,10 +531,18 @@ export function getTokenExpiry(userId?: string): number {
   return userTokenCache[cacheKey]?.expiresAt || 0;
 }
 
-export async function getAuthenticatedContext(): Promise<BrowserContext> {
-  const hasExistingSession = existsSync(SESSION_PATH);
+export async function getAuthenticatedContext(userId?: string): Promise<BrowserContext> {
+  // Load credentials
+  const credentials = await getD2LCredentials(userId);
+  const D2L_HOST = credentials?.host || process.env.D2L_HOST || "learn.ul.ie";
+  const username = credentials?.username || process.env.D2L_USERNAME;
+  const password = credentials?.password || process.env.D2L_PASSWORD;
+  const HOME_URL = `https://${D2L_HOST}/d2l/home`;
+  const sessionPath = getSessionPath(userId);
+  
+  const hasExistingSession = existsSync(sessionPath);
 
-  let context = await chromium.launchPersistentContext(SESSION_PATH, {
+  let context = await chromium.launchPersistentContext(sessionPath, {
     headless: hasExistingSession,
     viewport: { width: 1280, height: 720 },
   });
@@ -720,7 +728,7 @@ export async function getAuthenticatedContext(): Promise<BrowserContext> {
         if (hasExistingSession) {
           await context.close();
           console.error("Session expired, opening browser for login...");
-          context = await chromium.launchPersistentContext(SESSION_PATH, {
+          context = await chromium.launchPersistentContext(sessionPath, {
             headless: false,
             viewport: { width: 1280, height: 720 },
           });

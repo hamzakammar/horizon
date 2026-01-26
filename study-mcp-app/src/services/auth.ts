@@ -129,10 +129,33 @@ export class AuthService {
           .join('')
       );
       const payload = JSON.parse(jsonPayload);
+      
+      // Helper to check if a string is a UUID
+      const isUUID = (str: string | undefined): boolean => {
+        if (!str) return false;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(str);
+      };
+      
+      // Try to get a proper name, avoiding UUIDs
+      let name: string | undefined;
+      if (payload.name && !isUUID(payload.name)) {
+        name = payload.name;
+      } else if (payload.given_name || payload.family_name) {
+        name = [payload.given_name, payload.family_name].filter(Boolean).join(' ');
+      } else if (payload.nickname && !isUUID(payload.nickname)) {
+        name = payload.nickname;
+      } else if (payload['cognito:username'] && !isUUID(payload['cognito:username'])) {
+        name = payload['cognito:username'];
+      } else if (payload.email) {
+        // Use email as fallback, but we'll format it nicely in the UI
+        name = undefined;
+      }
+      
       return {
         id: payload.sub,
         email: payload.email,
-        name: payload.name || payload['cognito:username'] || payload.email,
+        name: name,
       };
     } catch (error) {
       console.error('Error parsing JWT:', error);
@@ -211,15 +234,80 @@ export class AuthService {
 
           // Extract tokens from response
           const idToken = data.AuthenticationResult?.IdToken;
+          const accessToken = data.AuthenticationResult?.AccessToken;
           if (!idToken) {
             reject(new Error('No ID token received from authentication'));
             return;
           }
 
-          const user = this.parseJWT(idToken);
+          let user = this.parseJWT(idToken);
           if (!user) {
             reject(new Error('Failed to parse user information from token'));
             return;
+          }
+
+          // Fetch user attributes from Cognito to get display name
+          if (accessToken) {
+            try {
+              const secretHash = this.computeSecretHash(email);
+              const getUserResponse = await fetch(
+                `https://cognito-idp.${cognitoConfig.region}.amazonaws.com/`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'X-Amz-Target': 'AWSCognitoIdentityProviderService.GetUser',
+                    'Content-Type': 'application/x-amz-json-1.1',
+                  },
+                  body: JSON.stringify({
+                    AccessToken: accessToken,
+                    ...(secretHash && { SecretHash: secretHash }),
+                  }),
+                }
+              );
+
+              if (getUserResponse.ok) {
+                const userData = await getUserResponse.json();
+                
+                // Helper to check if a string is a UUID
+                const isUUID = (str: string | undefined): boolean => {
+                  if (!str) return false;
+                  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                  return uuidRegex.test(str);
+                };
+
+                // Extract display name from user attributes
+                let displayName: string | undefined;
+                if (userData.UserAttributes) {
+                  const nameAttr = userData.UserAttributes.find((attr: any) => attr.Name === 'name');
+                  if (nameAttr?.Value && !isUUID(nameAttr.Value)) {
+                    displayName = nameAttr.Value;
+                  }
+                  
+                  if (!displayName) {
+                    const givenName = userData.UserAttributes.find((attr: any) => attr.Name === 'given_name')?.Value;
+                    const familyName = userData.UserAttributes.find((attr: any) => attr.Name === 'family_name')?.Value;
+                    if (givenName || familyName) {
+                      displayName = [givenName, familyName].filter(Boolean).join(' ');
+                    }
+                  }
+                  
+                  if (!displayName) {
+                    const nickname = userData.UserAttributes.find((attr: any) => attr.Name === 'nickname')?.Value;
+                    if (nickname && !isUUID(nickname)) {
+                      displayName = nickname;
+                    }
+                  }
+                }
+
+                // Update user with display name if found
+                if (displayName && user) {
+                  user.name = displayName;
+                }
+              }
+            } catch (attrError) {
+              console.warn('[Auth] Error fetching user attributes:', attrError);
+              // Continue without attributes
+            }
           }
 
           await this.setToken(idToken);
@@ -251,11 +339,69 @@ export class AuthService {
         onSuccess: async (session: CognitoUserSession) => {
           try {
             const idToken = session.getIdToken().getJwtToken();
-            const user = this.parseJWT(idToken);
+            let user = this.parseJWT(idToken);
 
             if (!user) {
               reject(new Error('Failed to parse user information from token'));
               return;
+            }
+
+            // Fetch user attributes from Cognito to get display name
+            try {
+              await new Promise<void>((resolveAttr, rejectAttr) => {
+                cognitoUser.getUserAttributes((err, attributes) => {
+                  if (err) {
+                    console.warn('[Auth] Failed to fetch user attributes:', err);
+                    resolveAttr(); // Continue without attributes
+                    return;
+                  }
+
+                  if (attributes && user) {
+                    // Helper to check if a string is a UUID
+                    const isUUID = (str: string | undefined): boolean => {
+                      if (!str) return false;
+                      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                      return uuidRegex.test(str);
+                    };
+
+                    // Find display name from attributes
+                    let displayName: string | undefined;
+                    
+                    // Try name attribute first
+                    const nameAttr = attributes.find(attr => attr.getName() === 'name');
+                    if (nameAttr && !isUUID(nameAttr.getValue())) {
+                      displayName = nameAttr.getValue();
+                    }
+                    
+                    // Try given_name + family_name
+                    if (!displayName) {
+                      const givenName = attributes.find(attr => attr.getName() === 'given_name')?.getValue();
+                      const familyName = attributes.find(attr => attr.getName() === 'family_name')?.getValue();
+                      if (givenName || familyName) {
+                        displayName = [givenName, familyName].filter(Boolean).join(' ');
+                      }
+                    }
+                    
+                    // Try nickname
+                    if (!displayName) {
+                      const nickname = attributes.find(attr => attr.getName() === 'nickname')?.getValue();
+                      if (nickname && !isUUID(nickname)) {
+                        displayName = nickname;
+                      }
+                    }
+
+                    // Update user with display name if found
+                    if (displayName) {
+                      user.name = displayName;
+                    }
+                  }
+                  
+                  resolveAttr();
+                });
+              });
+            } catch (attrError) {
+              console.warn('[Auth] Error fetching user attributes:', attrError);
+              // Continue without attributes
             }
 
             await this.setToken(idToken);
@@ -288,7 +434,7 @@ export class AuthService {
   /**
    * Register a new user
    */
-  async signUp(email: string, password: string): Promise<{ user: User; token: string }> {
+  async signUp(email: string, password: string, name?: string): Promise<{ user: User; token: string }> {
     return new Promise((resolve, reject) => {
       const secretHash = this.computeSecretHash(email);
       
@@ -321,6 +467,10 @@ export class AuthService {
                       Name: 'email',
                       Value: email,
                     },
+                    ...(name ? [{
+                      Name: 'name',
+                      Value: name,
+                    }] : []),
                   ],
                 }),
               }
@@ -377,6 +527,10 @@ export class AuthService {
           Name: 'email',
           Value: email,
         }),
+        ...(name ? [new CognitoUserAttribute({
+          Name: 'name',
+          Value: name,
+        })] : []),
       ];
 
       userPool.signUp(email, password, attributeList, [], (err: any, result) => {

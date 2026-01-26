@@ -33,6 +33,7 @@ export interface Note {
   updatedAt: string;
   pageCount?: number;
   chunkCount?: number;
+  status?: string;
 }
 
 export interface SearchHit {
@@ -43,6 +44,7 @@ export interface SearchHit {
   url?: string;
   anchor?: string;
   score: number;
+  courseId?: string;
 }
 
 export interface SearchResponse {
