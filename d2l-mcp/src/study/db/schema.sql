@@ -300,5 +300,28 @@ as $$
 $$;
 
 -- =========================================================
+-- 7) DEVICE TOKENS (Push Notifications)
+-- =========================================================
+create table if not exists public.device_tokens (
+  id uuid primary key default gen_random_uuid(),
+  user_id text not null,
+  device_token text not null,
+  platform text not null, -- 'ios' | 'android'
+  updated_at timestamptz not null default now(),
+  
+  constraint device_tokens_user_token_unique unique (user_id, device_token)
+);
+
+create index if not exists idx_device_tokens_user on public.device_tokens(user_id);
+create index if not exists idx_device_tokens_platform on public.device_tokens(platform);
+
+drop trigger if exists set_device_tokens_updated_at on public.device_tokens;
+create trigger set_device_tokens_updated_at
+before update on public.device_tokens
+for each row execute function public.set_updated_at();
+
+alter table public.device_tokens disable row level security;
+
+-- =========================================================
 -- End
 -- =========================================================

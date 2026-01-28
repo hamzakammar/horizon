@@ -53,11 +53,22 @@ export class NotesService {
    * Triggers embedding generation for notes that haven't been embedded yet
    */
   async embedMissing(): Promise<{ status: string; message: string }> {
-    // TODO: Implement API endpoint: POST /api/notes/embed-missing
     const response = await apiClient.post<{ status: string; message: string }>(
       '/api/notes/embed-missing'
     );
     return response.data;
+  }
+
+  /**
+   * Search notes using semantic search
+   */
+  async searchNotes(query: string, courseId?: string): Promise<any[]> {
+    const params: any = { q: query };
+    if (courseId) {
+      params.courseId = courseId;
+    }
+    const response = await apiClient.get<{ hits: any[] }>('/api/search', { params });
+    return response.data.hits || [];
   }
 }
 

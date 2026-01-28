@@ -1,4 +1,5 @@
 import { getToken } from "./auth.js";
+import { getSessionCookies } from "./auth-valence.js";
 
 const D2L_HOST = process.env.D2L_HOST || "learn.ul.ie";
 const BASE_URL = `https://${D2L_HOST}`;
@@ -30,17 +31,28 @@ export class D2LClient {
     console.error(`[API] Starting ${method} request to: ${path}`);
 
     const tokenStartTime = Date.now();
-    const token = await getToken(this.userId);
+    
+    // Try Valence API session-based auth first (cookie-based, more reliable)
+    let cookieString: string | null = null;
+    try {
+      cookieString = await getSessionCookies(this.userId);
+      console.error(`[API] Session cookies obtained via Valence API pattern (${Date.now() - tokenStartTime}ms)`);
+    } catch (e) {
+      console.error(`[API] Valence auth failed, falling back to legacy: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    
+    // Fallback to legacy token-based auth
+    const token = cookieString || await getToken(this.userId);
     const tokenTime = Date.now() - tokenStartTime;
-    console.error(`[API] Token obtained (${tokenTime}ms)`);
+    console.error(`[API] Token/cookies obtained (${tokenTime}ms)`);
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
 
-    // If token contains "d2lSessionVal", treat it as a cookie string
-    if (token.includes("d2lSessionVal")) {
-      headers["Cookie"] = token;
+    // Use cookies if available (Valence API pattern), otherwise try Bearer token
+    if (cookieString || token.includes("d2lSessionVal") || token.includes("d2lSecureSessionVal")) {
+      headers["Cookie"] = cookieString || token;
     } else {
       headers["Authorization"] = `Bearer ${token}`;
     }

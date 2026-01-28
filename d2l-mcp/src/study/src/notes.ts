@@ -78,11 +78,17 @@ function buildUrl(absolutePath: string, relativePath: string | null, webBase?: s
 }
 
 async function parsePdfBuffer(buffer: Buffer, logLabel = "PDF"): Promise<{ text: string; pageCount: number }> {
-	const data = await pdfParse(buffer);
-	const text = (data?.text || "") as string;
-	const pageCount = typeof data?.numpages === "number" ? data.numpages : 0;
-	console.error(`[${logLabel}] Extracted ${text.length} chars, ${pageCount} pages`);
-	return { text: normalizeWhitespace(text), pageCount };
+	try {
+		const data = await pdfParse(buffer);
+		const text = (data?.text || "") as string;
+		const pageCount = typeof data?.numpages === "number" ? data.numpages : 0;
+		console.error(`[${logLabel}] Extracted ${text.length} chars, ${pageCount} pages`);
+		return { text: normalizeWhitespace(text), pageCount };
+	} catch (error) {
+		const errorMsg = error instanceof Error ? error.message : String(error);
+		console.error(`[${logLabel}] PDF parse error:`, errorMsg);
+		throw new Error(`Failed to parse PDF: ${errorMsg}. The file may be corrupted, encrypted, or in an unsupported format.`);
+	}
 }
 
 async function parsePdfText(filePath: string): Promise<string> {

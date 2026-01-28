@@ -4,12 +4,13 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-cookies/cookies": "^6.2.1",
     "@react-navigation/bottom-tabs": "^6.6.1",
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
@@ -20,9 +21,12 @@
     "expo": "~54.0.32",
     "expo-auth-session": "^7.0.10",
     "expo-crypto": "^15.0.8",
+    "expo-dev-client": "~6.0.20",
+    "expo-device": "~6.0.2",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.21",
     "expo-linking": "^8.0.11",
+    "expo-notifications": "~0.29.9",
     "expo-secure-store": "^15.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "^15.0.10",

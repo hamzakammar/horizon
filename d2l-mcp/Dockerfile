@@ -3,6 +3,7 @@ FROM node:20-alpine
 # Install Playwright system dependencies for Alpine
 RUN apk add --no-cache \
     chromium \
+    chromium-chromedriver \
     nss \
     freetype \
     freetype-dev \
@@ -13,7 +14,14 @@ RUN apk add --no-cache \
     ttf-opensans \
     bash \
     libstdc++ \
-    libgcc
+    libgcc \
+    xvfb \
+    dbus
+
+# Set environment variables for headless operation
+ENV DISPLAY=:99
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
@@ -21,9 +29,9 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies for Playwright)
+# Use Alpine's chromium, but also install Playwright's for fallback
 RUN npm ci && \
-    npx playwright install chromium && \
-    npx playwright install chromium-headless-shell
+    npx playwright install chromium-headless-shell --with-deps || true
 
 # Remove devDependencies to reduce image size (but keep Playwright binaries)
 # Note: We skip install-deps because we already installed Alpine packages manually above

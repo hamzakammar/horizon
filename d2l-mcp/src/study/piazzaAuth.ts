@@ -92,18 +92,58 @@ export async function getPiazzaAuthenticatedContext(userId?: string): Promise<Br
   const sessionPath = getSessionPath(userId);
   const hasExistingSession = existsSync(sessionPath);
 
+  // Force headless in production/AWS (ECS Fargate can't display)
+  const isProduction = process.env.NODE_ENV === "production" || process.env.AWS_EXECUTION_ENV !== undefined || !process.env.DISPLAY;
+  const shouldBeHeadless = isProduction || (hasExistingSession && !REMOTE_DEBUG);
+
   const browserArgs: string[] = [];
   if (REMOTE_DEBUG) {
     browserArgs.push("--remote-debugging-port=9223", "--no-sandbox", "--disable-setuid-sandbox");
     console.error("[PIAZZA_AUTH] Remote debugging enabled on port 9223");
   }
+  
+  // Add headless args for production/AWS (same as D2L auth)
+  if (isProduction) {
+    browserArgs.push(
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-features=TranslateUI",
+      "--disable-ipc-flooding-protection",
+      "--single-process"
+    );
+  }
 
-  // Try headless first only if we have an existing session
-  let context = await chromium.launchPersistentContext(sessionPath, {
-    headless: hasExistingSession && !REMOTE_DEBUG,
-    viewport: { width: 1280, height: 720 },
-    args: browserArgs.length ? browserArgs : undefined,
-  });
+  // Try headless first only if we have an existing session or in production
+  let context: BrowserContext;
+  try {
+    context = await chromium.launchPersistentContext(sessionPath, {
+      headless: shouldBeHeadless,
+      viewport: { width: 1280, height: 720 },
+      args: browserArgs.length > 0 ? browserArgs : undefined,
+      executablePath: isProduction ? "/usr/bin/chromium-browser" : undefined,
+    });
+  } catch (error: any) {
+    // If launch fails in production, try with more minimal args
+    if (isProduction) {
+      console.error("[PIAZZA_AUTH] Initial launch failed, retrying with minimal args:", error.message);
+      context = await chromium.launchPersistentContext(sessionPath, {
+        headless: true,
+        viewport: { width: 1280, height: 720 },
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--single-process"],
+        executablePath: "/usr/bin/chromium-browser",
+      });
+    } else {
+      throw error;
+    }
+  }
 
   const page = await context.newPage();
   console.error(`[PIAZZA_AUTH] Navigating to ${PIAZZA_HOME}`);
@@ -116,7 +156,14 @@ export async function getPiazzaAuthenticatedContext(userId?: string): Promise<Br
   if (!loggedIn) {
     console.error(`[PIAZZA_AUTH] Login required`);
 
-    // If we were headless, restart with visible browser for manual login
+    // If we were headless, restart with visible browser for manual login (only if not in production)
+    // In production, we cannot handle manual login - throw error
+    const isProduction = process.env.NODE_ENV === "production" || process.env.AWS_EXECUTION_ENV !== undefined || !process.env.DISPLAY;
+    if (isProduction) {
+      await context.close();
+      throw new Error("Piazza session expired and manual login required, but running in production/AWS where browser login is not possible. Please re-authenticate via mobile app.");
+    }
+    
     if (hasExistingSession && !REMOTE_DEBUG) {
       await context.close();
       console.error("[PIAZZA_AUTH] Session expired, reopening browser for login...");
@@ -155,6 +202,26 @@ export async function getPiazzaAuthenticatedContext(userId?: string): Promise<Br
 }
 
 export async function getPiazzaCookieHeader(userId?: string): Promise<string> {
+  // First, try to get cookies from database (WebView login)
+  if (userId) {
+    try {
+      const { data, error } = await supabase
+        .from("user_credentials")
+        .select("token")
+        .eq("user_id", userId)
+        .eq("service", "piazza")
+        .single();
+      
+      if (!error && data?.token) {
+        console.error("[PIAZZA_AUTH] Using stored cookies from database");
+        return data.token; // Cookies stored as token
+      }
+    } catch (e) {
+      console.error("[PIAZZA_AUTH] Failed to get cookies from DB, falling back to browser:", e);
+    }
+  }
+  
+  // Fallback to browser-based auth (for local dev or if no cookies stored)
   const context = await getPiazzaAuthenticatedContext(userId);
   try {
     const cookies = await context.cookies(["https://piazza.com"]);

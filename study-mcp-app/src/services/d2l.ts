@@ -164,8 +164,33 @@ export class D2LService {
         throw new Error(response.data?.message || response.data?.error || 'Failed to sync D2L data');
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to sync D2L data';
-      throw new Error(errorMessage);
+      console.error('[D2L] Sync error:', error);
+      console.error('[D2L] Sync error response:', error.response?.data);
+      console.error('[D2L] Sync error status:', error.response?.status);
+      
+      // Get detailed error message
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          error.message || 
+                          'Failed to sync D2L data';
+      
+      // Include status code and check for specific error types
+      if (error.response?.status === 401) {
+        if (error.response?.data?.error === 'REAUTH_REQUIRED' || error.response?.data?.error === 'AUTH_REQUIRED') {
+          throw new Error('Your D2L session has expired. Please sign in again using the WebView.');
+        }
+        throw new Error(`Authentication failed: ${errorMessage}`);
+      }
+      
+      if (error.response?.status === 403) {
+        throw new Error(`Access forbidden: ${errorMessage}. Please check your D2L connection.`);
+      }
+      
+      const fullErrorMessage = error.response?.status 
+        ? `[${error.response.status}] ${errorMessage}`
+        : errorMessage;
+      
+      throw new Error(fullErrorMessage);
     }
   }
 
@@ -205,6 +230,19 @@ export class D2LService {
     } catch (error: any) {
       console.error('Error fetching assignments:', error);
       throw new Error(error.response?.data?.error || 'Failed to fetch assignments');
+    }
+  }
+
+  /**
+   * Get grades for a course
+   */
+  async getGrades(courseId: string): Promise<any[]> {
+    try {
+      const response = await apiClient.get(`/api/d2l/courses/${courseId}/grades`);
+      return response.data.grades || [];
+    } catch (error: any) {
+      console.error('Error fetching grades:', error);
+      throw new Error(error.response?.data?.error || 'Failed to fetch grades');
     }
   }
 }

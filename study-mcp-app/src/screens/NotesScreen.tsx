@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +17,9 @@ import { Note } from '../types';
 
 export default function NotesScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
@@ -38,8 +42,46 @@ export default function NotesScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadNotes();
+    if (searchQuery) {
+      performSearch();
+    } else {
+      loadNotes();
+    }
   };
+
+  const performSearch = async () => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await notesService.searchNotes(searchQuery.trim());
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching notes:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        performSearch();
+      } else {
+        setSearchResults([]);
+        if (notes.length === 0) {
+          loadNotes();
+        }
+      }
+    }, 500); // Debounce search
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   const renderNote = ({ item }: { item: Note }) => (
     <TouchableOpacity style={styles.noteCard}>
@@ -61,6 +103,23 @@ export default function NotesScreen() {
     </TouchableOpacity>
   );
 
+  const renderSearchResult = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.searchResultCard}>
+      <Text style={styles.searchResultTitle}>{item.title}</Text>
+      {item.courseId && (
+        <Text style={styles.searchResultCourse}>{item.courseId}</Text>
+      )}
+      <Text style={styles.searchResultSnippet} numberOfLines={2}>
+        {item.snippet}
+      </Text>
+      {item.score && (
+        <Text style={styles.searchResultScore}>
+          Relevance: {(item.score * 100).toFixed(0)}%
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -77,25 +136,73 @@ export default function NotesScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <Text>Loading notes...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={notes}
-          renderItem={renderNote}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <View style={styles.centerContainer}>
-              <AntDesign name="mail" size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
-              <Text style={styles.emptyText}>No notes yet</Text>
-              <Text style={styles.emptySubtext}>Upload your first note to get started</Text>
-            </View>
-          }
+      <View style={styles.searchContainer}>
+        <AntDesign name="search1" size={20} color="#94a3b8" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search notes..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+          onSubmitEditing={performSearch}
         />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              setSearchQuery('');
+              setSearchResults([]);
+            }}
+            style={styles.clearButton}
+          >
+            <AntDesign name="closecircle" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {searchQuery.trim() ? (
+        isSearching ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Searching...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={searchResults}
+            renderItem={renderSearchResult}
+            keyExtractor={(item, index) => item.sectionId || `search-${index}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              <View style={styles.centerContainer}>
+                <AntDesign name="search1" size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
+                <Text style={styles.emptyText}>No results found</Text>
+                <Text style={styles.emptySubtext}>Try a different search query</Text>
+              </View>
+            }
+          />
+        )
+      ) : (
+        loading ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color="#6366f1" />
+            <Text style={styles.loadingText}>Loading notes...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={notes}
+            renderItem={renderNote}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              <View style={styles.centerContainer}>
+                <AntDesign name="book" size={48} color="#94a3b8" style={{ marginBottom: 16 }} />
+                <Text style={styles.emptyText}>No notes yet</Text>
+                <Text style={styles.emptySubtext}>Upload your first note to get started</Text>
+              </View>
+            }
+          />
+        )
       )}
     </SafeAreaView>
   );
@@ -202,5 +309,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     textAlign: 'center',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    marginHorizontal: 24,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1e293b',
+  },
+  clearButton: {
+    marginLeft: 8,
+    padding: 4,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748b',
+  },
+  searchResultCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  searchResultTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  searchResultCourse: {
+    fontSize: 13,
+    color: '#6366f1',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  searchResultSnippet: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  searchResultScore: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
 });

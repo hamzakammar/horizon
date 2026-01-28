@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,40 +7,93 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  ScrollView,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { notesService } from '../services/notes';
+import { d2lService } from '../services/d2l';
+
+interface Course {
+  id: string;
+  name: string;
+  code: string;
+}
 
 export default function UploadScreen() {
   const [file, setFile] = useState<DocumentPicker.DocumentPickerResult | null>(null);
   const [title, setTitle] = useState('');
   const [courseId, setCourseId] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [showCoursePicker, setShowCoursePicker] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const navigation = useNavigation();
 
-  const pickDocument = async () => {
+  const loadCourses = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        setFile(result);
-        if (!title) {
-          setTitle(result.assets[0].name.replace('.pdf', ''));
-        }
-      }
-    } catch (error) {
-      console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document');
+      setLoadingCourses(true);
+      const data = await d2lService.getCourses();
+      setCourses(data);
+    } catch (error: any) {
+      console.error('Error loading courses:', error);
+      // Don't show error - courses are optional
+    } finally {
+      setLoadingCourses(false);
     }
   };
 
-  const handleUpload = async () => {
+  useEffect(() => {
+    loadCourses();
+  }, []);
+
+  const selectCourse = (course: Course) => {
+    setSelectedCourse(course);
+    setCourseId(course.id);
+    setShowCoursePicker(false);
+  };
+
+  const pickDocument = async () => {
+    try {
+      // Request permissions first (iOS may need this)
+      const permissionResult = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (permissionResult.canceled) {
+        return; // User cancelled, don't show error
+      }
+
+      if (permissionResult.assets && permissionResult.assets[0]) {
+        const asset = permissionResult.assets[0];
+        if (!asset.uri) {
+          Alert.alert('Error', 'Invalid file selected');
+          return;
+        }
+        setFile(permissionResult);
+        if (!title) {
+          setTitle(asset.name.replace('.pdf', ''));
+        }
+      } else {
+        Alert.alert('Error', 'No file selected');
+      }
+    } catch (error: any) {
+      console.error('Error picking document:', error);
+      const errorMessage = error?.message || 'Failed to pick document';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
+  const handleUpload = async (retryCount = 0) => {
     if (!file || file.canceled || !file.assets || !file.assets[0]) {
       Alert.alert('Error', 'Please select a file');
       return;
@@ -52,9 +105,13 @@ export default function UploadScreen() {
       return;
     }
 
+    setError(null);
     setUploading(true);
+    setUploadProgress(0);
+    
     try {
       // Step 1: Get presigned URL
+      setUploadProgress(10);
       const presignResponse = await notesService.presignUpload({
         filename: asset.name || 'document.pdf',
         contentType: asset.mimeType || 'application/pdf',
@@ -63,21 +120,26 @@ export default function UploadScreen() {
       });
 
       // Step 2: Upload file to S3
+      setUploadProgress(30);
       await notesService.uploadFile(
         presignResponse.uploadUrl,
         asset.uri,
         asset.mimeType || 'application/pdf'
       );
 
+      setUploadProgress(60);
       setUploading(false);
       setProcessing(true);
 
       // Step 3: Process the note
+      setUploadProgress(80);
       const processResponse = await notesService.processNote({
         s3Key: presignResponse.s3Key,
         courseId: courseId || undefined,
         title: title || undefined,
       });
+
+      setUploadProgress(100);
 
       Alert.alert(
         'Success',
@@ -90,7 +152,9 @@ export default function UploadScreen() {
               setFile(null);
               setTitle('');
               setCourseId('');
+              setSelectedCourse(null);
               setProcessing(false);
+              setUploadProgress(0);
               // Navigate back
               navigation.goBack();
             },
@@ -99,7 +163,41 @@ export default function UploadScreen() {
       );
     } catch (error: any) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Failed', error.message || 'An error occurred');
+      console.error('Upload error response:', error.response?.data);
+      console.error('Upload error status:', error.response?.status);
+      
+      // Get detailed error message
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.details || 
+                          error.response?.data?.message ||
+                          error.message || 
+                          'An error occurred during upload';
+      
+      // Include status code if available
+      const fullErrorMessage = error.response?.status 
+        ? `[${error.response.status}] ${errorMessage}`
+        : errorMessage;
+      
+      setError(fullErrorMessage);
+      
+      // Retry logic (max 2 retries)
+      if (retryCount < 2) {
+        Alert.alert(
+          'Upload Failed',
+          `${errorMessage}\n\nWould you like to retry?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Retry',
+              onPress: () => {
+                setTimeout(() => handleUpload(retryCount + 1), 1000);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Upload Failed', errorMessage);
+      }
     } finally {
       setUploading(false);
       setProcessing(false);
@@ -107,12 +205,23 @@ export default function UploadScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Upload Note</Text>
 
       <View style={styles.section}>
         <Text style={styles.label}>File</Text>
-        <TouchableOpacity style={styles.fileButton} onPress={pickDocument}>
+        <TouchableOpacity 
+          style={styles.fileButton} 
+          onPress={() => {
+            try {
+              pickDocument();
+            } catch (error: any) {
+              console.error('Error in pickDocument:', error);
+              Alert.alert('Error', error?.message || 'Failed to open document picker');
+            }
+          }} 
+          disabled={uploading || processing}
+        >
           <AntDesign 
             name={file && !file.canceled && file.assets && file.assets[0] ? "file-text" : "cloud-upload"} 
             size={24} 
@@ -124,6 +233,11 @@ export default function UploadScreen() {
               ? file.assets[0].name
               : 'Select PDF File'}
           </Text>
+          {file && !file.canceled && file.assets && file.assets[0] && (
+            <Text style={styles.fileSize}>
+              {(file.assets[0].size / 1024 / 1024).toFixed(2)} MB
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -134,26 +248,59 @@ export default function UploadScreen() {
           placeholder="Note title"
           value={title}
           onChangeText={setTitle}
+          editable={!uploading && !processing}
         />
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Course ID (optional)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g., MATH119"
-          value={courseId}
-          onChangeText={setCourseId}
-          autoCapitalize="characters"
-        />
+        <Text style={styles.label}>Course (optional)</Text>
+        <TouchableOpacity
+          style={styles.coursePicker}
+          onPress={() => setShowCoursePicker(true)}
+          disabled={uploading || processing || loadingCourses}
+        >
+          <Text style={[styles.coursePickerText, !selectedCourse && styles.coursePickerPlaceholder]}>
+            {selectedCourse ? `${selectedCourse.code} - ${selectedCourse.name}` : 'Select a course'}
+          </Text>
+          <AntDesign name="down" size={16} color="#64748b" />
+        </TouchableOpacity>
+        {selectedCourse && (
+          <TouchableOpacity
+            style={styles.clearCourseButton}
+            onPress={() => {
+              setSelectedCourse(null);
+              setCourseId('');
+            }}
+          >
+            <Text style={styles.clearCourseText}>Clear selection</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <AntDesign name="exclamationcircleo" size={20} color="#ef4444" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {(uploading || processing) && (
+        <View style={styles.progressContainer}>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+          </View>
+          <Text style={styles.statusText}>
+            {uploading ? `Uploading... ${uploadProgress}%` : `Processing... ${uploadProgress}%`}
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={[
           styles.uploadButton,
           (uploading || processing || !file || file.canceled) && styles.uploadButtonDisabled,
         ]}
-        onPress={handleUpload}
+        onPress={() => handleUpload()}
         disabled={uploading || processing || !file || file.canceled}
       >
         {uploading || processing ? (
@@ -166,20 +313,58 @@ export default function UploadScreen() {
         )}
       </TouchableOpacity>
 
-      {(uploading || processing) && (
-        <Text style={styles.statusText}>
-          {uploading ? 'Uploading...' : 'Processing...'}
-        </Text>
-      )}
-    </View>
+      <Modal
+        visible={showCoursePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCoursePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Course</Text>
+              <TouchableOpacity onPress={() => setShowCoursePicker(false)}>
+                <AntDesign name="close" size={24} color="#1e293b" />
+              </TouchableOpacity>
+            </View>
+            {loadingCourses ? (
+              <View style={styles.modalLoading}>
+                <ActivityIndicator size="large" color="#6366f1" />
+              </View>
+            ) : (
+              <FlatList
+                data={courses}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.courseItem}
+                    onPress={() => selectCourse(item)}
+                  >
+                    <Text style={styles.courseItemCode}>{item.code}</Text>
+                    <Text style={styles.courseItemName}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.modalEmpty}>
+                    <Text style={styles.modalEmptyText}>No courses available</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
     backgroundColor: '#ffffff',
+  },
+  contentContainer: {
+    padding: 24,
   },
   title: {
     fontSize: 32,
@@ -221,6 +406,69 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  fileSize: {
+    color: '#64748b',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  coursePicker: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#f8fafc',
+  },
+  coursePickerText: {
+    fontSize: 16,
+    color: '#1e293b',
+    flex: 1,
+  },
+  coursePickerPlaceholder: {
+    color: '#94a3b8',
+  },
+  clearCourseButton: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  clearCourseText: {
+    color: '#6366f1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    color: '#dc2626',
+    fontSize: 14,
+  },
+  progressContainer: {
+    marginBottom: 16,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#6366f1',
+    borderRadius: 4,
+  },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -245,9 +493,60 @@ const styles = StyleSheet.create({
   },
   statusText: {
     textAlign: 'center',
-    marginTop: 20,
     color: '#64748b',
     fontSize: 14,
     fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  modalLoading: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  modalEmpty: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  modalEmptyText: {
+    color: '#64748b',
+    fontSize: 16,
+  },
+  courseItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  courseItemCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366f1',
+    marginBottom: 4,
+  },
+  courseItemName: {
+    fontSize: 14,
+    color: '#64748b',
   },
 });

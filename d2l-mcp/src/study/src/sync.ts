@@ -1,5 +1,5 @@
 import { supabase } from "../../utils/supabase.js";
-import { client } from '../../client.js';
+import { D2LClient } from '../../client.js';
 import { marshalAssignments, RawAssignment } from '../../utils/marshal.js';
 
 interface Enrollment {
@@ -23,7 +23,10 @@ export const SyncTools = {
     schema: {},
     handler: async ({ userId }: { userId: string }) => {
       try {
-        console.log('[SYNC] Starting sync_all...');
+        console.log('[SYNC] Starting sync_all for user:', userId);
+        
+        // Create D2L client with userId (needed for auth)
+        const client = new D2LClient(userId);
         
         // Get all enrollments
         const enrollmentsResponse = await client.getMyEnrollments() as { Items: Enrollment[] };

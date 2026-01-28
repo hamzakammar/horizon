@@ -99,6 +99,29 @@ export default function SettingsScreen() {
     }
   };
 
+  const handlePiazzaDisconnect = async () => {
+    Alert.alert(
+      'Disconnect Piazza',
+      'Are you sure you want to disconnect your Piazza account?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await piazzaService.disconnect();
+              Alert.alert('Success', 'Piazza disconnected successfully');
+              await loadIntegrationStatus();
+            } catch (error: any) {
+              Alert.alert('Disconnect Failed', error.message || 'Failed to disconnect Piazza');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleEmbedMissing = async () => {
     Alert.alert(
       'Embed Missing Notes',
@@ -203,8 +226,17 @@ export default function SettingsScreen() {
           <Text style={styles.integrationDescription}>
             Sync posts, discussions, and Q&A from Piazza
           </Text>
-          {piazzaStatus.lastSync && (
-            <Text style={styles.lastSync}>Last sync: {new Date(piazzaStatus.lastSync).toLocaleString()}</Text>
+          {piazzaStatus.connected && (
+            <View style={styles.statusInfo}>
+              {piazzaStatus.classesCount !== undefined && piazzaStatus.classesCount > 0 && (
+                <Text style={styles.statusInfoText}>
+                  {piazzaStatus.classesCount} {piazzaStatus.classesCount === 1 ? 'class' : 'classes'} synced
+                </Text>
+              )}
+              {piazzaStatus.lastSync && (
+                <Text style={styles.lastSync}>Last sync: {new Date(piazzaStatus.lastSync).toLocaleString()}</Text>
+              )}
+            </View>
           )}
           <View style={styles.integrationActions}>
             {!piazzaStatus.connected ? (
@@ -213,20 +245,29 @@ export default function SettingsScreen() {
                 <Text style={styles.connectButtonText}>Connect</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity
-                style={[styles.syncButton, piazzaStatus.syncing && styles.syncButtonDisabled]}
-                onPress={handlePiazzaSync}
-                disabled={piazzaStatus.syncing}
-              >
-                {piazzaStatus.syncing ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <AntDesign name="sync" size={16} color="#fff" style={{ marginRight: 6 }} />
-                    <Text style={styles.syncButtonText}>Sync Now</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  style={[styles.syncButton, piazzaStatus.syncing && styles.syncButtonDisabled, { flex: 1 }]}
+                  onPress={handlePiazzaSync}
+                  disabled={piazzaStatus.syncing}
+                >
+                  {piazzaStatus.syncing ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <AntDesign name="sync" size={16} color="#fff" style={{ marginRight: 6 }} />
+                      <Text style={styles.syncButtonText}>Sync Now</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.disconnectButton]}
+                  onPress={handlePiazzaDisconnect}
+                >
+                  <AntDesign name="logout" size={16} color="#ef4444" style={{ marginRight: 6 }} />
+                  <Text style={styles.disconnectButtonText}>Sign Out</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -367,6 +408,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 20,
   },
+  statusInfo: {
+    marginBottom: 12,
+  },
+  statusInfoText: {
+    fontSize: 13,
+    color: '#6366f1',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
   lastSync: {
     fontSize: 12,
     color: '#94a3b8',
@@ -412,6 +462,21 @@ const styles = StyleSheet.create({
   },
   syncButtonText: {
     color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  disconnectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+  },
+  disconnectButtonText: {
+    color: '#ef4444',
     fontWeight: '600',
     fontSize: 15,
   },

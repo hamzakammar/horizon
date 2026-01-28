@@ -32,16 +32,28 @@ export default function CourseDetailScreen() {
   const navigation = useNavigation();
   const { course } = (route.params as { course: Course }) || {};
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [grades, setGrades] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gradesLoading, setGradesLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'announcements' | 'content'>('announcements');
+  const [gradesError, setGradesError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'announcements' | 'grades' | 'content'>('announcements');
 
   useEffect(() => {
     if (course) {
       loadAnnouncements();
+      if (activeTab === 'grades') {
+        loadGrades();
+      }
     }
   }, [course]);
+
+  useEffect(() => {
+    if (activeTab === 'grades' && course && grades.length === 0 && !gradesLoading) {
+      loadGrades();
+    }
+  }, [activeTab]);
 
   const loadAnnouncements = async () => {
     if (!course) return;
@@ -65,9 +77,29 @@ export default function CourseDetailScreen() {
     }
   };
 
+  const loadGrades = async () => {
+    if (!course) return;
+    
+    try {
+      setGradesError(null);
+      setGradesLoading(true);
+      const data = await d2lService.getGrades(course.id);
+      setGrades(data);
+    } catch (err: any) {
+      console.error('Error loading grades:', err);
+      setGradesError(err.message || 'Failed to load grades');
+    } finally {
+      setGradesLoading(false);
+    }
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
-    loadAnnouncements();
+    if (activeTab === 'announcements') {
+      loadAnnouncements();
+    } else if (activeTab === 'grades') {
+      loadGrades();
+    }
   };
 
   const formatDate = (dateString: string | null) => {
@@ -127,6 +159,19 @@ export default function CourseDetailScreen() {
           />
           <Text style={[styles.tabText, activeTab === 'announcements' && styles.activeTabText]}>
             Announcements
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'grades' && styles.activeTab]}
+          onPress={() => setActiveTab('grades')}
+        >
+          <AntDesign 
+            name="staro" 
+            size={18} 
+            color={activeTab === 'grades' ? '#6366f1' : '#94a3b8'} 
+          />
+          <Text style={[styles.tabText, activeTab === 'grades' && styles.activeTabText]}>
+            Grades
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -196,6 +241,67 @@ export default function CourseDetailScreen() {
                     </View>
                   ))}
                 </View>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {activeTab === 'grades' && (
+        <ScrollView
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {gradesLoading && (
+            <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#6366f1" />
+              <Text style={styles.loadingText}>Loading grades...</Text>
+            </View>
+          )}
+
+          {!gradesLoading && gradesError && (
+            <View style={styles.errorContainer}>
+              <AntDesign name="exclamationcircleo" size={32} color="#ef4444" />
+              <Text style={styles.errorText}>{gradesError}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={loadGrades}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!gradesLoading && !gradesError && grades.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <AntDesign name="staro" size={48} color="#94a3b8" />
+              <Text style={styles.emptyText}>No grades available</Text>
+              <Text style={styles.emptySubtext}>
+                Grades will appear here once they are posted
+              </Text>
+            </View>
+          )}
+
+          {!gradesLoading && !gradesError && grades.map((grade, index) => (
+            <View key={index} style={styles.gradeCard}>
+              <View style={styles.gradeHeader}>
+                <Text style={styles.gradeName}>{grade.name}</Text>
+                {grade.percentage && (
+                  <Text style={styles.gradePercentage}>{grade.percentage}</Text>
+                )}
+              </View>
+              {grade.score && (
+                <Text style={styles.gradeScore}>{grade.score}</Text>
+              )}
+              {grade.feedback && (
+                <View style={styles.feedbackContainer}>
+                  <Text style={styles.feedbackLabel}>Feedback:</Text>
+                  <Text style={styles.feedbackText}>{grade.feedback}</Text>
+                </View>
+              )}
+              {grade.lastModified && (
+                <Text style={styles.gradeDate}>
+                  Updated: {formatDate(grade.lastModified)}
+                </Text>
               )}
             </View>
           ))}
@@ -387,5 +493,64 @@ const styles = StyleSheet.create({
   attachmentText: {
     fontSize: 14,
     color: '#64748b',
+  },
+  gradeCard: {
+    backgroundColor: '#ffffff',
+    margin: 16,
+    marginBottom: 0,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  gradeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  gradeName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1e293b',
+    flex: 1,
+    marginRight: 12,
+  },
+  gradePercentage: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#6366f1',
+  },
+  gradeScore: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 8,
+  },
+  feedbackContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  feedbackLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  feedbackText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  gradeDate: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 8,
   },
 });

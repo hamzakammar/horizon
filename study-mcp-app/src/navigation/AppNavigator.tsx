@@ -11,6 +11,7 @@ import VerifyEmailScreen from '../screens/Auth/VerifyEmailScreen';
 import D2LConnectScreen from '../screens/Auth/D2LConnectScreen';
 import D2LWebViewScreen from '../screens/Auth/D2LWebViewScreen';
 import PiazzaConnectScreen from '../screens/Auth/PiazzaConnectScreen';
+import PiazzaWebViewScreen from '../screens/Auth/PiazzaWebViewScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import NotesScreen from '../screens/NotesScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -141,6 +142,13 @@ export default function AppNavigator() {
               options={{
                 headerShown: true,
                 title: 'Connect Piazza',
+              }}
+            />
+            <Stack.Screen
+              name="PiazzaWebView"
+              component={PiazzaWebViewScreen}
+              options={{
+                headerShown: false,
               }}
             />
             <Stack.Screen

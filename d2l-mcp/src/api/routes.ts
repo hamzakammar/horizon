@@ -12,6 +12,7 @@ import { PiazzaTools } from "../study/src/piazza.js";
 import { D2LClient } from "../client.js";
 import { getToken } from "../auth.js";
 import { getPiazzaCookieHeader } from "../study/piazzaAuth.js";
+import { registerDeviceToken, sendPushToUser, checkAndNotifyUpdates } from "./push.js";
 
 const router = Router();
 
@@ -86,13 +87,68 @@ router.post("/notes/process", async (req: Request, res: Response) => {
       return;
     }
 
-    const { chunkCount, pageCount } = await ingestPdfBuffer(userId, buffer, {
-      courseId: course,
-      title: noteTitle,
-      noteId: note.id,
-      url,
-    });
-    const embedded = await embedNoteSections(userId, note.id);
+    if (buffer.length === 0) {
+      await supabase.from("notes").update({ status: "error" }).eq("id", note.id);
+      res.status(400).json({ error: "PDF file is empty", noteId: note.id });
+      return;
+    }
+
+    let chunkCount = 0;
+    let pageCount = 0;
+    try {
+      console.error("[API] Starting PDF ingestion, buffer size:", buffer.length);
+      const ingestResult = await ingestPdfBuffer(userId, buffer, {
+        courseId: course,
+        title: noteTitle,
+        noteId: note.id,
+        url,
+      });
+      chunkCount = ingestResult.chunkCount;
+      pageCount = ingestResult.pageCount;
+      console.error("[API] PDF ingestion successful:", { chunkCount, pageCount });
+    } catch (ingestError) {
+      const errorMsg = ingestError instanceof Error ? ingestError.message : String(ingestError);
+      const errorStack = ingestError instanceof Error ? ingestError.stack : undefined;
+      console.error("[API] ingestPdfBuffer error:", errorMsg);
+      console.error("[API] ingestPdfBuffer stack:", errorStack);
+      console.error("[API] ingestPdfBuffer full error:", ingestError);
+      
+      await supabase.from("notes").update({ status: "error" }).eq("id", note.id);
+      
+      // Check if it's a PDF parsing error
+      if (errorMsg.includes("pdf-parse") || errorMsg.includes("PDF") || errorMsg.includes("parse")) {
+        res.status(500).json({ 
+          error: "Failed to parse PDF file", 
+          details: errorMsg,
+          noteId: note.id,
+          suggestion: "The PDF file may be corrupted, encrypted, or in an unsupported format. Please try a different PDF file.",
+          debug: {
+            bufferSize: buffer.length,
+            s3Key: s3Key.substring(0, 50),
+          }
+        });
+      } else {
+        res.status(500).json({ 
+          error: "Failed to ingest PDF", 
+          details: errorMsg,
+          noteId: note.id,
+          debug: {
+            bufferSize: buffer.length,
+            s3Key: s3Key.substring(0, 50),
+          }
+        });
+      }
+      return;
+    }
+
+    let embedded = 0;
+    try {
+      embedded = await embedNoteSections(userId, note.id);
+    } catch (embedError) {
+      console.error("[API] embedNoteSections error:", embedError);
+      // Don't fail the whole request if embedding fails - note is still usable
+      console.error("[API] Continuing despite embedding failure");
+    }
 
     await supabase
       .from("notes")
@@ -107,11 +163,35 @@ router.post("/notes/process", async (req: Request, res: Response) => {
       embedded,
     });
   } catch (e) {
-    console.error("[API] process error:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    const errorStack = e instanceof Error ? e.stack : undefined;
+    console.error("[API] process error:", errorMessage);
+    console.error("[API] process error stack:", errorStack);
+    console.error("[API] process error details:", {
+      userId,
+      s3Key,
+      courseId: course,
+      title: noteTitle,
+      noteId,
+      s3KeyPrefix: s3Key?.substring(0, 50),
+      s3KeyStartsWithPrefix: s3Key?.startsWith(`users/${userId}/`),
+    });
+    
     if (noteId) {
       await supabase.from("notes").update({ status: "error" }).eq("id", noteId).eq("user_id", userId);
     }
-    res.status(500).json({ error: "Failed to process PDF", noteId: noteId ?? undefined });
+    
+    // Return detailed error for debugging
+    res.status(500).json({ 
+      error: "Failed to process PDF", 
+      details: errorMessage,
+      noteId: noteId ?? undefined,
+      debug: {
+        s3KeyPrefix: s3Key?.substring(0, 50),
+        hasS3Key: !!s3Key,
+        s3KeyFormat: s3Key?.startsWith(`users/${userId}/`) ? 'valid' : 'invalid',
+      }
+    });
   }
 });
 
@@ -488,10 +568,21 @@ router.post("/d2l/connect", async (req: Request, res: Response) => {
     }
 
     // Now try to authenticate with D2L to verify credentials work
-    try {
+    // Set a timeout to prevent 504 Gateway Timeout (ALB timeout is typically 60s)
+    const authTimeout = 55000; // 55 seconds - slightly less than typical ALB timeout
+    const authPromise = (async () => {
       const client = new D2LClient(userId, host);
       // Try to get enrollments as a test - this will trigger authentication
       await client.getMyEnrollments();
+      return { success: true };
+    })();
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Authentication timeout - the login process is taking too long. This may be due to 2FA or additional verification steps.")), authTimeout)
+    );
+
+    try {
+      await Promise.race([authPromise, timeoutPromise]);
 
       // If we get here, authentication succeeded
       res.json({
@@ -538,14 +629,27 @@ router.get("/d2l/status", async (req: Request, res: Response) => {
   const userId = req.userId!;
   try {
     // Check if credentials exist in database
-    const { data: creds, error: credError } = await supabase
+    const { data: credsData, error: credError } = await supabase
       .from("user_credentials")
-      .select("host, username, updated_at")
+      .select("host, username, token, updated_at")
       .eq("user_id", userId)
       .eq("service", "d2l")
-      .maybeSingle();
+      .limit(1);
+    
+    const creds = Array.isArray(credsData) ? credsData[0] : credsData;
 
-    const connected = !credError && !!creds && !!creds.username;
+    // Check if we have token (cookie-based auth) or username (legacy credential-based)
+    const hasToken = !credError && !!creds && !!creds.token;
+    const hasUsername = !credError && !!creds && !!creds.username;
+    const connected = hasToken || hasUsername;
+
+    // Check token age - if older than 20 hours, signal reauth required
+    let reauthRequired = false;
+    if (hasToken && creds.updated_at) {
+      const tokenAge = Date.now() - (new Date(creds.updated_at).getTime());
+      const maxAge = 20 * 60 * 60 * 1000; // 20 hours
+      reauthRequired = tokenAge > maxAge;
+    }
 
     // Get last sync time from tasks table
     const { data: lastTaskData } = await supabase
@@ -560,21 +664,26 @@ router.get("/d2l/status", async (req: Request, res: Response) => {
 
     // Get courses count (optional - don't fail if this doesn't work)
     let coursesCount = 0;
-    if (connected && creds) {
+    if (connected && creds && !reauthRequired) {
       try {
         const client = new D2LClient(userId, creds.host);
         const enrollments = await client.getMyEnrollments() as { Items: any[] };
         coursesCount = enrollments?.Items?.filter(
           (e: any) => e.OrgUnit?.Type?.Code === "Course Offering" && e.Access?.IsActive && e.Access?.CanAccess
         ).length || 0;
-      } catch (e) {
-        // Ignore errors getting courses - credentials might be valid but not authenticated yet
+      } catch (e: any) {
+        // Check if error is REAUTH_REQUIRED
+        if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
+          reauthRequired = true;
+        }
+        // Ignore other errors getting courses - credentials might be valid but not authenticated yet
         console.error("[API] Error getting courses count:", e);
       }
     }
 
     res.json({
-      connected,
+      connected: connected && !reauthRequired,
+      reauthRequired,
       lastSync: lastTask?.created_at || null,
       coursesCount,
     });
@@ -582,6 +691,7 @@ router.get("/d2l/status", async (req: Request, res: Response) => {
     console.error("[API] d2l/status error:", e);
     res.json({
       connected: false,
+      reauthRequired: false,
       lastSync: null,
       coursesCount: 0,
     });
@@ -609,11 +719,33 @@ router.post("/d2l/sync", async (req: Request, res: Response) => {
         result: parsed,
       });
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error("[API] d2l/sync error:", e);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    
+    // Check if error is REAUTH_REQUIRED
+    if (errorMessage === "REAUTH_REQUIRED" || errorMessage.includes("REAUTH_REQUIRED")) {
+      res.status(401).json({ 
+        status: "failed",
+        error: "REAUTH_REQUIRED",
+        message: "Your D2L session has expired. Please sign in again using the WebView." 
+      });
+      return;
+    }
+    
+    // Check if it's an auth error (token issue)
+    if (errorMessage.includes("token") || errorMessage.includes("authentication") || errorMessage.includes("unauthorized")) {
+      res.status(401).json({
+        status: "failed",
+        error: "AUTH_REQUIRED",
+        message: "Authentication required. Please sign in again.",
+      });
+      return;
+    }
+    
     res.status(500).json({
       status: "failed",
-      error: e instanceof Error ? e.message : String(e),
+      error: errorMessage,
     });
   }
 });
@@ -655,8 +787,16 @@ router.get("/d2l/courses", async (req: Request, res: Response) => {
       }));
 
     res.json({ courses });
-  } catch (e) {
+  } catch (e: any) {
     console.error("[API] d2l/courses error:", e);
+    // Check if error is REAUTH_REQUIRED
+    if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
+      res.status(401).json({ 
+        error: "REAUTH_REQUIRED",
+        message: "Your D2L session has expired. Please sign in again using the WebView." 
+      });
+      return;
+    }
     res.status(500).json({ error: "Failed to fetch courses", details: e instanceof Error ? e.message : String(e) });
   }
 });
@@ -693,8 +833,16 @@ router.get("/d2l/courses/:courseId/announcements", async (req: Request, res: Res
     const announcements = marshalAnnouncements(news);
 
     res.json({ announcements });
-  } catch (e) {
+  } catch (e: any) {
     console.error("[API] d2l/courses/:courseId/announcements error:", e);
+    // Check if error is REAUTH_REQUIRED
+    if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
+      res.status(401).json({ 
+        error: "REAUTH_REQUIRED",
+        message: "Your D2L session has expired. Please sign in again using the WebView." 
+      });
+      return;
+    }
     res.status(500).json({
       error: "Failed to fetch announcements",
       details: e instanceof Error ? e.message : String(e)
@@ -742,9 +890,63 @@ router.get("/d2l/courses/:courseId/assignments", async (req: Request, res: Respo
         instructions: a.instructions || null,
       })),
     });
-  } catch (e) {
+  } catch (e: any) {
     console.error("[API] d2l/courses/:courseId/assignments error:", e);
+    // Check if error is REAUTH_REQUIRED
+    if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
+      res.status(401).json({ 
+        error: "REAUTH_REQUIRED",
+        message: "Your D2L session has expired. Please sign in again using the WebView." 
+      });
+      return;
+    }
     res.status(500).json({ error: "Failed to fetch assignments", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** GET /api/d2l/courses/:courseId/grades — Get grades for a course */
+router.get("/d2l/courses/:courseId/grades", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { courseId } = req.params;
+  const orgUnitId = parseInt(courseId, 10);
+
+  if (isNaN(orgUnitId)) {
+    res.status(400).json({ error: "Invalid course ID" });
+    return;
+  }
+
+  try {
+    // Get user's D2L host from credentials
+    const { data: credsData } = await supabase
+      .from("user_credentials")
+      .select("host")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .limit(1);
+
+    const creds = Array.isArray(credsData) ? credsData[0] : credsData;
+    if (!creds) {
+      res.status(404).json({ error: "D2L credentials not found. Please connect D2L first." });
+      return;
+    }
+
+    const client = new D2LClient(userId, creds.host);
+    const grades = await client.getMyGradeValues(orgUnitId) as any[];
+    const { marshalGrades } = await import("../utils/marshal.js");
+    const marshalledGrades = marshalGrades(grades);
+
+    res.json({ grades: marshalledGrades });
+  } catch (e: any) {
+    console.error("[API] d2l/courses/:courseId/grades error:", e);
+    // Check if error is REAUTH_REQUIRED
+    if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
+      res.status(401).json({ 
+        error: "REAUTH_REQUIRED",
+        message: "Your D2L session has expired. Please sign in again using the WebView." 
+      });
+      return;
+    }
+    res.status(500).json({ error: "Failed to fetch grades", details: e instanceof Error ? e.message : String(e) });
   }
 });
 
@@ -788,6 +990,124 @@ router.post("/piazza/connect", async (req: Request, res: Response) => {
   }
 });
 
+/** POST /api/piazza/connect-cookie — Store Piazza cookies directly (from WebView) */
+router.post("/piazza/connect-cookie", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { cookies } = req.body || {};
+
+  if (!cookies || typeof cookies !== "string") {
+    res.status(400).json({ error: "cookies required" });
+    return;
+  }
+
+  const correlationId = `piazza-cookie-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+  try {
+    // Extract session_id from cookies (Piazza uses session_id as the main cookie)
+    const sessionIdMatch = cookies.match(/session_id=([^;]+)/);
+    if (!sessionIdMatch) {
+      res.status(400).json({ error: "Invalid cookies: session_id not found" });
+      return;
+    }
+
+    // Store cookies in user_credentials table as the 'token'
+    // We'll use a dummy email since we're using cookies
+    const { error } = await supabase
+      .from("user_credentials")
+      .upsert({
+        user_id: userId,
+        service: "piazza",
+        email: `cookie-auth-${userId}@piazza.local`, // Dummy email for cookie-based auth
+        password: cookies, // Store cookies as password (legacy field, but we use token now)
+        token: cookies, // Store cookies as the token string
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,service"
+      });
+
+    if (error) {
+      console.error(`[API] [${correlationId}] piazza/connect-cookie error storing:`, error);
+      res.status(500).json({ error: "Failed to store cookies", correlationId });
+      return;
+    }
+
+    console.error(`[API] [${correlationId}] Piazza cookies stored, verifying...`);
+
+    // Verify cookies work by making a test API call
+    try {
+      const cookieHeader = cookies;
+      const testResponse = await fetch("https://piazza.com/logic/api?method=network.get_my_feed", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "accept": "application/json",
+          "cookie": cookieHeader,
+        },
+        body: JSON.stringify({ method: "network.get_my_feed", params: { limit: 1 } }),
+      });
+
+      if (!testResponse.ok || testResponse.headers.get("content-type")?.includes("text/html")) {
+        throw new Error("Invalid cookies - Piazza API returned error");
+      }
+
+      console.error(`[API] [${correlationId}] Piazza cookies verified successfully`);
+      res.json({
+        status: "connected",
+        message: "Piazza connected via cookies successfully",
+        correlationId
+      });
+    } catch (verifyError) {
+      console.error(`[API] [${correlationId}] Piazza cookie verification failed:`, verifyError);
+
+      // Delete invalid credentials
+      const { error: deleteError } = await supabase
+        .from("user_credentials")
+        .delete()
+        .eq("user_id", userId)
+        .eq("service", "piazza");
+
+      res.status(400).json({
+        error: "Invalid or expired cookies. Please try logging in again.",
+        details: verifyError instanceof Error ? verifyError.message : String(verifyError),
+        correlationId
+      });
+    }
+  } catch (e) {
+    console.error(`[API] [${correlationId}] piazza/connect-cookie error:`, e);
+    res.status(500).json({ 
+      error: "Failed to connect Piazza", 
+      details: e instanceof Error ? e.message : String(e),
+      correlationId 
+    });
+  }
+});
+
+/** DELETE /api/piazza/disconnect — Remove Piazza credentials */
+router.delete("/piazza/disconnect", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  try {
+    const { error } = await supabase
+      .from("user_credentials")
+      .delete()
+      .eq("user_id", userId)
+      .eq("service", "piazza");
+
+    if (error) {
+      console.error("[API] piazza/disconnect error:", error);
+      res.status(500).json({ error: "Failed to disconnect Piazza" });
+      return;
+    }
+
+    res.json({
+      status: "disconnected",
+      message: "Piazza disconnected successfully"
+    });
+  } catch (e) {
+    console.error("[API] piazza/disconnect error:", e);
+    res.status(500).json({ error: "Failed to disconnect", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 /** GET /api/piazza/status — Get Piazza connection status */
 router.get("/piazza/status", async (req: Request, res: Response) => {
   const userId = req.userId!;
@@ -795,23 +1115,48 @@ router.get("/piazza/status", async (req: Request, res: Response) => {
     // Check if credentials exist in database
     const { data: credsData, error: credError } = await supabase
       .from("user_credentials")
-      .select("email, updated_at")
+      .select("email, token, updated_at")
       .eq("user_id", userId)
       .eq("service", "piazza")
       .limit(1);
 
     const creds = Array.isArray(credsData) ? credsData[0] : credsData;
 
-    // Also try to get cookie to see if actually authenticated
+    // Check if we have valid cookies/token (not just credentials)
     let cookieHeader: string | null = null;
-    try {
-      cookieHeader = await getPiazzaCookieHeader(userId);
-    } catch (e) {
-      // Ignore - might not be authenticated yet
+    let hasValidAuth = false;
+    
+    // First check if token exists in database (cookies stored via WebView)
+    if (creds?.token && typeof creds.token === "string") {
+      const tokenValue = creds.token;
+      // Verify cookies contain session_id (Piazza's main auth cookie)
+      if (tokenValue.includes("session_id=")) {
+        cookieHeader = tokenValue;
+        hasValidAuth = true;
+        console.error("[API] piazza/status - found valid cookies in DB");
+      } else {
+        console.error("[API] piazza/status - cookies in DB but missing session_id");
+      }
+    }
+    
+    // Fallback: try getPiazzaCookieHeader (for browser-based auth)
+    if (!hasValidAuth) {
+      try {
+        const retrievedCookies = await getPiazzaCookieHeader(userId);
+        // If we got cookies, verify they're valid by checking for session_id
+        if (retrievedCookies && retrievedCookies.includes("session_id=")) {
+          cookieHeader = retrievedCookies;
+          hasValidAuth = true;
+        }
+      } catch (e) {
+        // Not authenticated - that's fine
+        console.error("[API] piazza/status - no valid auth:", e instanceof Error ? e.message : String(e));
+      }
     }
 
-    // Connected if credentials exist (even if not authenticated yet)
-    const connected = !credError && !!creds && !!creds.email;
+    // Connected only if we have valid cookies/token (not just stored credentials)
+    // This ensures we only show "connected" if actually authenticated
+    const connected = hasValidAuth && cookieHeader !== null && cookieHeader.length > 0;
 
     // Get last sync time from piazza_posts table
     const { data: lastPostData } = await supabase
@@ -878,10 +1223,21 @@ router.post("/piazza/sync", async (req: Request, res: Response) => {
     }
   } catch (e) {
     console.error("[API] piazza/sync error:", e);
-    res.status(500).json({
-      status: "failed",
-      error: e instanceof Error ? e.message : String(e),
-    });
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    
+    // Check if it's a browser launch error (production/AWS issue)
+    if (errorMessage.includes("Failed to launch") || errorMessage.includes("browserType.launchPersistentContext")) {
+      res.status(503).json({
+        status: "failed",
+        error: "Piazza sync is not available in this environment. Browser automation requires a local environment or manual authentication via the mobile app.",
+        message: "Piazza sync requires browser automation which is not available in AWS ECS. Please use the mobile app to authenticate Piazza.",
+      });
+    } else {
+      res.status(500).json({
+        status: "failed",
+        error: errorMessage,
+      });
+    }
   }
 });
 
@@ -962,6 +1318,46 @@ router.get("/piazza/search", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[API] piazza/search error:", e);
     res.status(500).json({ error: "Search failed", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** POST /api/push/register — Register device token for push notifications */
+router.post("/push/register", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { deviceToken, platform } = req.body || {};
+
+  if (!deviceToken || !platform) {
+    res.status(400).json({ error: "deviceToken and platform required" });
+    return;
+  }
+
+  if (platform !== "ios" && platform !== "android") {
+    res.status(400).json({ error: "platform must be 'ios' or 'android'" });
+    return;
+  }
+
+  try {
+    await registerDeviceToken(userId, deviceToken, platform);
+    res.json({ status: "registered" });
+  } catch (e) {
+    console.error("[API] push/register error:", e);
+    res.status(500).json({ error: "Failed to register device token", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** POST /api/push/sync — Check for updates and send notifications (can be called by cron) */
+router.post("/push/sync", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+
+  try {
+    const results = await checkAndNotifyUpdates(userId);
+    res.json({
+      status: "completed",
+      results,
+    });
+  } catch (e) {
+    console.error("[API] push/sync error:", e);
+    res.status(500).json({ error: "Failed to check updates", details: e instanceof Error ? e.message : String(e) });
   }
 });
 

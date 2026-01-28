@@ -101,6 +101,7 @@ const userTokenCache: Record<string, TokenCache> = {};
 export async function getToken(userId?: string): Promise<string> {
   const authStartTime = Date.now();
   const cacheKey = userId || "default";
+  const isProduction = process.env.NODE_ENV === "production";
 
   // If userId is provided, check for stored token first (from WebView login)
   if (userId) {
@@ -112,6 +113,10 @@ export async function getToken(userId?: string): Promise<string> {
       
       if (tokenAge > maxAge) {
         console.error(`[AUTH] Stored token for user ${userId} is too old (${Math.round(tokenAge / 3600000)}h), will refresh`);
+        // In production, throw REAUTH_REQUIRED instead of attempting automated login
+        if (isProduction) {
+          throw new Error("REAUTH_REQUIRED");
+        }
         // Don't use cached token, continue to refresh
       } else {
         console.error(`[AUTH] Using stored token for user ${userId} (age: ${Math.round(tokenAge / 3600000)}h)`);
@@ -123,7 +128,13 @@ export async function getToken(userId?: string): Promise<string> {
       }
     }
 
-    // Fall back to credentials if no token
+    // In production, if no valid token exists, throw REAUTH_REQUIRED instead of attempting login
+    if (isProduction) {
+      console.error(`[AUTH] Production mode: No valid token found for user ${userId}, throwing REAUTH_REQUIRED`);
+      throw new Error("REAUTH_REQUIRED");
+    }
+
+    // Fall back to credentials if no token (non-production only)
     const userCreds = await getD2LCredentials(userId);
     if (userCreds && userCreds.username && userCreds.password) {
       console.error(`[AUTH] Using user-specific credentials for user ${userId}`);
@@ -208,25 +219,71 @@ export async function getToken(userId?: string): Promise<string> {
 
   // Always try headless first if session exists - only show browser if login needed
   const browserStartTime = Date.now();
-  const isProduction = process.env.NODE_ENV === "production" || !process.env.DISPLAY;
-  let context = await chromium.launchPersistentContext(sessionPath, {
-    headless: isProduction || (hasExistingSession && !REMOTE_DEBUG),
-    viewport: { width: 1280, height: 720 },
-    args: browserArgs.length > 0 ? browserArgs : undefined,
-  });
+  // Use the isProduction variable already declared at the top of getToken function
+  const isProductionEnv = process.env.NODE_ENV === "production" || !process.env.DISPLAY;
+  
+  // In Docker/production/AWS, ALWAYS use headless mode
+  const headlessMode = isProductionEnv || (hasExistingSession && !REMOTE_DEBUG);
+  
+  // In production, ensure we never launch a headed browser
+  if (isProductionEnv && !headlessMode) {
+    console.error("[AUTH] Production mode: Forcing headless mode");
+  }
+  
+  // Add required args for headless mode in Docker/Alpine
+  const dockerArgs = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--disable-software-rasterizer',
+    '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-features=TranslateUI',
+    '--disable-ipc-flooding-protection',
+    '--single-process', // Required for some Docker environments
+  ];
+  
+  const allArgs = [...dockerArgs, ...browserArgs];
+  
+  // Try to use Alpine's chromium if available, otherwise use Playwright's
+  const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || 
+                       (isProduction ? '/usr/bin/chromium-browser' : undefined);
+  
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(sessionPath, {
+      headless: headlessMode, // true for headless, false for headed
+      viewport: { width: 1280, height: 720 },
+      args: allArgs.length > 0 ? allArgs : undefined,
+      executablePath: chromiumPath,
+    } as any); // Type assertion for headless: 'shell' support
+  } catch (launchError: any) {
+    // If launch fails, try without explicit executable path (use Playwright's bundled)
+    console.error(`[AUTH] First launch attempt failed: ${launchError.message}`);
+    console.error(`[AUTH] Retrying without explicit executable path...`);
+    context = await chromium.launchPersistentContext(sessionPath, {
+      headless: headlessMode,
+      viewport: { width: 1280, height: 720 },
+      args: allArgs.length > 0 ? allArgs : undefined,
+    } as any);
+  }
   const browserTime = Date.now() - browserStartTime;
   console.error(
-    `[AUTH] Browser launched (headless: ${isProduction || hasExistingSession}, ${browserTime}ms)`
+    `[AUTH] Browser launched (headless: ${isProductionEnv || hasExistingSession}, ${browserTime}ms)`
   );
 
   try {
     const captureStartTime = Date.now();
-    const result = await captureToken(context, hasExistingSession, HOME_URL, D2L_USERNAME, D2L_PASSWORD);
+    const result = await captureToken(context, hasExistingSession, HOME_URL, D2L_USERNAME, D2L_PASSWORD, userId);
     const captureTime = Date.now() - captureStartTime;
     console.error(`[AUTH] Token captured (${captureTime}ms)`);
 
-    // If we need to login and were running headless, restart with headed browser
-    if (result.needsLogin && hasExistingSession) {
+    // If we need to login and were running headless, restart with headed browser (only in non-production)
+    if (result.needsLogin && hasExistingSession && !isProductionEnv) {
       await context.close();
       console.error("[AUTH] Session expired, opening browser for login...");
       const retryBrowserStartTime = Date.now();
@@ -241,7 +298,7 @@ export async function getToken(userId?: string): Promise<string> {
       );
 
       const retryCaptureStartTime = Date.now();
-      const retryResult = await captureToken(context, false, HOME_URL, D2L_USERNAME, D2L_PASSWORD);
+      const retryResult = await captureToken(context, false, HOME_URL, D2L_USERNAME, D2L_PASSWORD, userId);
       const retryCaptureTime = Date.now() - retryCaptureStartTime;
       console.error(`[AUTH] Token captured on retry (${retryCaptureTime}ms)`);
 
@@ -252,6 +309,10 @@ export async function getToken(userId?: string): Promise<string> {
       const totalTime = Date.now() - authStartTime;
       console.error(`[AUTH] Token refresh completed (${totalTime}ms)`);
       return retryResult.token;
+    } else if (result.needsLogin && isProductionEnv) {
+      // In production, we cannot handle login - throw REAUTH_REQUIRED
+      await context.close();
+      throw new Error("REAUTH_REQUIRED");
     }
 
     userTokenCache[cacheKey] = {
@@ -274,25 +335,132 @@ async function captureToken(
   quickCheck: boolean,
   homeUrl: string,
   username?: string | null,
-  password?: string | null
+  password?: string | null,
+  userId?: string
 ): Promise<{ token: string; needsLogin: boolean }> {
   const captureStartTime = Date.now();
   console.error(`[AUTH] Starting token capture (quickCheck: ${quickCheck})`);
 
+  // First, try to get cookies from database (prioritize stored cookies)
+  if (userId) {
+    try {
+      const storedToken = await getD2LToken(userId);
+      if (storedToken && storedToken.token) {
+        // Check if it's a cookie string (contains d2lSessionVal or d2lSecureSessionVal)
+        if (storedToken.token.includes('d2lSessionVal') || storedToken.token.includes('d2lSecureSessionVal')) {
+          const tokenAge = Date.now() - (new Date(storedToken.updated_at || 0).getTime());
+          const maxAge = 20 * 60 * 60 * 1000; // 20 hours
+          
+          if (tokenAge < maxAge) {
+            console.error(`[AUTH] Using stored cookies from database (age: ${Math.round(tokenAge / 3600000)}h)`);
+            return { token: storedToken.token, needsLogin: false };
+          } else {
+            console.error(`[AUTH] Stored cookies are too old (${Math.round(tokenAge / 3600000)}h), will capture new ones`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[AUTH] Error checking stored cookies: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   const page = await context.newPage();
   let capturedToken = "";
+  
+  // Helper function to extract cookies from browser context
+  // Prioritize d2lSessionVal and d2lSecureSessionVal
+  const extractCookiesFromContext = async (): Promise<string | null> => {
+    try {
+      const cookies = await context.cookies();
+      // Prioritize the two essential cookies
+      const essentialCookies = cookies.filter(c => 
+        c.name === 'd2lSessionVal' || 
+        c.name === 'd2lSecureSessionVal'
+      );
+      
+      // Also include other D2L session cookies if available
+      const otherD2lCookies = cookies.filter(c => 
+        (c.name.includes('d2lSession') || 
+         c.name.includes('d2lSecure') ||
+         c.name.includes('d2lUser') ||
+         c.name.includes('d2lAuth')) &&
+        c.name !== 'd2lSessionVal' &&
+        c.name !== 'd2lSecureSessionVal'
+      );
+      
+      // Combine essential cookies first, then others
+      const allD2lCookies = [...essentialCookies, ...otherD2lCookies];
+      
+      if (allD2lCookies.length > 0) {
+        const cookieString = allD2lCookies.map(c => `${c.name}=${c.value}`).join('; ');
+        console.error(`[AUTH] Extracted ${allD2lCookies.length} D2L cookies from context: ${allD2lCookies.map(c => c.name).join(', ')}`);
+        
+        // Ensure we have at least one of the essential cookies
+        if (essentialCookies.length > 0) {
+          return cookieString;
+        } else {
+          console.error(`[AUTH] Warning: No essential cookies (d2lSessionVal/d2lSecureSessionVal) found, but found other cookies`);
+          return cookieString; // Still return it, but log warning
+        }
+      }
+    } catch (e) {
+      console.error(`[AUTH] Failed to extract cookies from context: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return null;
+  };
 
-  // Listen for requests to capture Authorization header from any D2L API call
+  // Listen for requests to capture Authorization header or cookies from any D2L API call
   page.on("request", (request) => {
     const url = request.url();
     if (url.includes("/d2l/api/")) {
+      // Try to capture Bearer token first
       const auth = request.headers()["authorization"];
       if (auth?.startsWith("Bearer ")) {
         capturedToken = auth.slice(7);
         const captureTime = Date.now() - captureStartTime;
         console.error(
-          `[AUTH] Token captured from API request to ${url} (${captureTime}ms)`
+          `[AUTH] Token captured from API request Authorization header to ${url} (${captureTime}ms)`
         );
+        return;
+      }
+      
+      // Fallback: Try to capture cookies (D2L might use session cookies instead of Bearer token)
+      const cookies = request.headers()["cookie"];
+      if (cookies && (cookies.includes("d2lSessionVal") || cookies.includes("d2lSecureSessionVal"))) {
+        capturedToken = cookies;
+        const captureTime = Date.now() - captureStartTime;
+        console.error(
+          `[AUTH] Token captured from API request cookies to ${url} (${captureTime}ms)`
+        );
+      }
+    }
+  });
+  
+  // Also listen for responses to capture cookies from Set-Cookie headers
+  page.on("response", async (response) => {
+    const url = response.url();
+    if (url.includes("/d2l/api/") || url.includes("/d2l/home")) {
+      const setCookieHeaders = response.headers()["set-cookie"];
+      if (setCookieHeaders) {
+        const cookies = Array.isArray(setCookieHeaders) ? setCookieHeaders.join("; ") : setCookieHeaders;
+        if (cookies.includes("d2lSessionVal") || cookies.includes("d2lSecureSessionVal")) {
+          if (!capturedToken || !capturedToken.includes("d2lSessionVal")) {
+            // Extract relevant cookies
+            const cookieParts = cookies.split(";").filter(c => 
+              c.includes("d2lSessionVal") || 
+              c.includes("d2lSecureSessionVal") || 
+              c.includes("d2lSessionId") ||
+              c.includes("d2lUser")
+            );
+            if (cookieParts.length > 0) {
+              capturedToken = cookieParts.join("; ");
+              const captureTime = Date.now() - captureStartTime;
+              console.error(
+                `[AUTH] Token captured from response Set-Cookie headers from ${url} (${captureTime}ms)`
+              );
+            }
+          }
+        }
       }
     }
   });
@@ -468,31 +636,89 @@ async function captureToken(
           if (!submitted) {
             console.error(`[AUTH] No submit button found, trying form submission...`);
             try {
-              // Try submitting the form directly
+              // Try multiple submission methods
               await page.evaluate(() => {
                 const form = document.querySelector('form');
                 if (form) {
-                  form.submit();
+                  // Try triggering submit event first (for JS handlers)
+                  const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                  if (form.dispatchEvent(submitEvent)) {
+                    form.submit();
+                  }
                   return;
                 }
               });
-              await page.waitForTimeout(1000);
-            } catch {
-              // Fallback to pressing Enter
+              await page.waitForTimeout(2000);
+            } catch (e) {
+              // Fallback to pressing Enter on password field
               console.error(`[AUTH] Form submit failed, pressing Enter...`);
-              await passwordField.press("Enter");
+              try {
+                await passwordField.press("Enter");
+                await page.waitForTimeout(2000);
+              } catch (enterError) {
+                console.error(`[AUTH] Enter key press also failed: ${enterError}`);
+              }
             }
           }
 
           // Wait for navigation away from login page
+          // Reduced timeout to prevent overall process from exceeding ALB timeout
           const loginWaitStartTime = Date.now();
           console.error(`[AUTH] Waiting for login to complete...`);
           await page.waitForURL((url) => !isLoginPage(url.toString()), {
-            timeout: quickCheck ? 30000 : 60000,
+            timeout: quickCheck ? 20000 : 30000, // Reduced from 60000 to 30000
           });
           await page.waitForLoadState("networkidle");
           const loginWaitTime = Date.now() - loginWaitStartTime;
           console.error(`[AUTH] Login completed (${loginWaitTime}ms)`);
+          
+          // Extract cookies directly from browser context after login
+          const extractedCookies = await extractCookiesFromContext();
+          if (extractedCookies) {
+            capturedToken = extractedCookies;
+            console.error(`[AUTH] Token captured from browser context cookies immediately after login`);
+          } else {
+            // Also try extracting from page's document.cookie
+            try {
+              const pageCookies = await page.evaluate(() => document.cookie);
+              if (pageCookies && (pageCookies.includes('d2lSessionVal') || pageCookies.includes('d2lSecureSessionVal'))) {
+                capturedToken = pageCookies;
+                console.error(`[AUTH] Token captured from document.cookie`);
+              }
+            } catch (e) {
+              console.error(`[AUTH] Failed to read document.cookie: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+          
+          // If we still don't have a token, wait a bit for cookies to be set, then try again
+          if (!capturedToken) {
+            console.error(`[AUTH] No token captured yet, waiting for cookies to be set...`);
+            await page.waitForTimeout(2000);
+            const retryCookies = await extractCookiesFromContext();
+            if (retryCookies) {
+              capturedToken = retryCookies;
+              console.error(`[AUTH] Token captured from browser context after wait`);
+            }
+          }
+          
+          // If we still don't have a token, trigger an API call to force cookie usage
+          if (!capturedToken) {
+            try {
+              const apiUrl = homeUrl.replace('/d2l/home', '/d2l/api/lp/1.43/enrollments/myenrollments/');
+              console.error(`[AUTH] No token yet, triggering API call to capture token: ${apiUrl}`);
+              await page.goto(apiUrl, { waitUntil: "networkidle", timeout: 15000 });
+              await page.waitForTimeout(2000); // Give time for request to complete
+              
+              // Try extracting cookies again after API call
+              const finalCookies = await extractCookiesFromContext();
+              if (finalCookies) {
+                capturedToken = finalCookies;
+                console.error(`[AUTH] Token captured from browser context after API call`);
+              }
+            } catch (e) {
+              console.error(`[AUTH] Failed to trigger API call: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
       } catch (error) {
         // Fall back to SSO button click if form login fails
         console.error(`[AUTH] Form login failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -504,7 +730,7 @@ async function captureToken(
           if (await ssoButton.isVisible({ timeout: 2000 })) {
             await ssoButton.click();
             await page.waitForURL((url) => !isLoginPage(url.toString()), {
-              timeout: quickCheck ? 15000 : 60000,
+              timeout: quickCheck ? 15000 : 30000, // Reduced from 60000 to 30000
             });
             await page.waitForLoadState("networkidle");
           }
@@ -540,12 +766,26 @@ async function captureToken(
   }
 
   // Wait for token capture
-  const maxWait = quickCheck ? 10000 : 120000;
+  // Reduced max wait to prevent 504 Gateway Timeout (ALB timeout is typically 60s)
+  const maxWait = quickCheck ? 10000 : 45000; // Reduced from 120000 to 45000 (45s)
   const waitStartTime = Date.now();
   console.error(`[AUTH] Waiting for token capture (max wait: ${maxWait}ms)`);
 
   while (Date.now() - waitStartTime < maxWait) {
-    currentUrl = page.url();
+    try {
+      currentUrl = page.url();
+    } catch (e) {
+      // Page might have navigated or closed, check if we have token
+      console.error(`[AUTH] Failed to get page URL (page may have navigated): ${e instanceof Error ? e.message : String(e)}`);
+      if (capturedToken) {
+        const waitTime = Date.now() - waitStartTime;
+        console.error(`[AUTH] Token captured before page navigation (${waitTime}ms)`);
+        break;
+      }
+      // If no token and page is gone, wait a bit and check again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      continue;
+    }
 
     if (!isLoginPage(currentUrl)) {
       // We're logged in, wait for API calls
@@ -553,10 +793,20 @@ async function captureToken(
         console.error(
           `[AUTH] Token not captured yet, waiting and scrolling...`
         );
-        await page.waitForTimeout(2000);
-        // Try scrolling to trigger more API calls
-        await page.evaluate(() => window.scrollBy(0, 100));
-        await page.waitForTimeout(1000);
+        try {
+          await page.waitForTimeout(2000);
+          // Try scrolling to trigger more API calls (wrap in try-catch in case page navigates)
+          try {
+            await page.evaluate(() => window.scrollBy(0, 100));
+          } catch (e) {
+            // Page might have navigated, that's okay - token might have been captured
+            console.error(`[AUTH] Scroll failed (page may have navigated): ${e instanceof Error ? e.message : String(e)}`);
+          }
+          await page.waitForTimeout(1000);
+        } catch (e) {
+          // Page might have navigated or closed, check if we have token
+          console.error(`[AUTH] Wait failed (page may have navigated): ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
 
       if (capturedToken) {
@@ -566,7 +816,12 @@ async function captureToken(
       }
     } else if (!quickCheck) {
       // Wait for user to login
-      await page.waitForTimeout(2000);
+      try {
+        await page.waitForTimeout(2000);
+      } catch (e) {
+        // Page might have navigated, that's okay
+        console.error(`[AUTH] Wait failed during login wait: ${e instanceof Error ? e.message : String(e)}`);
+      }
     } else {
       break;
     }
@@ -624,9 +879,13 @@ export async function getAuthenticatedContext(userId?: string): Promise<BrowserC
   const sessionPath = getSessionPath(userId);
   
   const hasExistingSession = existsSync(sessionPath);
+  const isProductionEnv = process.env.NODE_ENV === "production" || !process.env.DISPLAY;
+
+  // In production, always use headless mode
+  const headlessMode = isProductionEnv || hasExistingSession;
 
   let context = await chromium.launchPersistentContext(sessionPath, {
-    headless: hasExistingSession,
+    headless: headlessMode,
     viewport: { width: 1280, height: 720 },
   });
 
@@ -807,8 +1066,9 @@ export async function getAuthenticatedContext(userId?: string): Promise<BrowserC
           await page.waitForLoadState("domcontentloaded");
         }
       } catch {
-        // If headless failed to auto-login, restart with visible browser
-        if (hasExistingSession) {
+        // If headless failed to auto-login, restart with visible browser (only in non-production)
+        const isProductionEnv = process.env.NODE_ENV === "production" || !process.env.DISPLAY;
+        if (hasExistingSession && !isProductionEnv) {
           await context.close();
           console.error("Session expired, opening browser for login...");
           context = await chromium.launchPersistentContext(sessionPath, {
@@ -823,6 +1083,10 @@ export async function getAuthenticatedContext(userId?: string): Promise<BrowserC
             timeout: 120000,
           });
           await newPage.close();
+        } else if (hasExistingSession && isProductionEnv) {
+          // In production, cannot handle login - throw error
+          await context.close();
+          throw new Error("REAUTH_REQUIRED");
         }
       }
     }

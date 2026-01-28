@@ -4,6 +4,7 @@ export interface PiazzaStatus {
   connected: boolean;
   syncing: boolean;
   lastSync?: string;
+  classesCount?: number;
 }
 
 export class PiazzaService {
@@ -25,11 +26,12 @@ export class PiazzaService {
    */
   async getStatus(): Promise<PiazzaStatus> {
     try {
-      const response = await apiClient.get<PiazzaStatus>('/api/piazza/status');
+      const response = await apiClient.get<any>('/api/piazza/status');
       return {
         connected: response.data.connected || false,
         syncing: false,
         lastSync: response.data.lastSync || undefined,
+        classesCount: response.data.classesCount || 0,
       };
     } catch (error: any) {
       console.error('Error getting Piazza status:', error);
@@ -37,6 +39,7 @@ export class PiazzaService {
       return {
         connected: false,
         syncing: false,
+        classesCount: 0,
       };
     }
   }
@@ -77,6 +80,42 @@ export class PiazzaService {
   }
 
   /**
+   * Connect to Piazza using cookies (from WebView capture)
+   */
+  async connectWithCookies(payload: { cookies: string }): Promise<void> {
+    try {
+      console.log('[Piazza] Storing cookies...');
+
+      const isHealthy = await this.checkBackendHealth();
+      if (!isHealthy) {
+        throw new Error('Cannot reach backend server. Please make sure the backend is running on ' +
+          (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.hamzaammar.ca'));
+      }
+
+      const response = await apiClient.post('/api/piazza/connect-cookie', payload, {
+        timeout: 30000,
+      });
+      if (response.status !== 200) {
+        throw new Error(response.data?.error || 'Failed to store cookies');
+      }
+      console.log('[Piazza] Cookies stored successfully');
+    } catch (error: any) {
+      console.error('[Piazza] Cookie storage error:', error);
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {
+        throw error;
+      }
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        throw new Error('Connection timeout. Please try again.');
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.error || 'Invalid or expired cookies');
+      }
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to store cookies';
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
    * Sync all Piazza data
    */
   async syncAll(): Promise<void> {
@@ -111,6 +150,21 @@ export class PiazzaService {
       params: { q: query, courseId },
     });
     return response.data.hits || [];
+  }
+
+  /**
+   * Disconnect Piazza (remove credentials)
+   */
+  async disconnect(): Promise<void> {
+    try {
+      const response = await apiClient.delete('/api/piazza/disconnect');
+      if (response.status !== 200) {
+        throw new Error(response.data?.error || 'Failed to disconnect Piazza');
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to disconnect Piazza';
+      throw new Error(errorMessage);
+    }
   }
 }
 

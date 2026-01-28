@@ -10,6 +10,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign } from '@expo/vector-icons';
+import CookieManager from '@react-native-cookies/cookies';
 import { d2lService } from '../../services/d2l';
 
 interface D2LWebViewScreenProps {
@@ -27,253 +28,63 @@ export default function D2LWebViewScreen({ route }: D2LWebViewScreenProps) {
   const navigation = useNavigation();
   const webViewRef = useRef<WebView>(null);
   const [loading, setLoading] = useState(true);
-  const [capturedToken, setCapturedToken] = useState<string | null>(null);
   const [capturedCookies, setCapturedCookies] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const d2lUrl = `https://${host}/d2l/home`;
 
-  // Simple injection: just intercept requests and check cookies periodically
-  const injectedJavaScript = `
-    (function() {
-      if (window.d2lInjected) return;
-      window.d2lInjected = true;
-
-      let tokenCaptured = false;
+  const handleNavigationStateChange = async (navState: any) => {
+    // Check if we've navigated to the D2L home page (successful login)
+    if (navState.url.includes('/d2l/home')) {
+      console.log('[D2L WebView] Navigated to /d2l/home, capturing cookies...');
       
-      function sendToken(token) {
-        if (!tokenCaptured && token && token.length > 20) {
-          tokenCaptured = true;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'TOKEN_CAPTURED',
-            token: token
-          }));
-        }
-      }
-
-      function sendCookies(cookies) {
-        if (!tokenCaptured && cookies) {
-          tokenCaptured = true;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'COOKIES_CAPTURED',
-            cookies: cookies
-          }));
-        }
-      }
-
-      // Simple fetch interception
-      const originalFetch = window.fetch;
-      window.fetch = function(...args) {
-        const url = args[0];
-        const options = args[1] || {};
-        if (typeof url === 'string' && url.includes('/d2l/api/')) {
-          const headers = options.headers || {};
-          const auth = headers['Authorization'] || headers['authorization'];
-          if (auth && auth.startsWith('Bearer ')) {
-            sendToken(auth.substring(7));
-          }
-        }
-        return originalFetch.apply(this, args);
-      };
-
-      // Simple XHR interception
-      const originalOpen = XMLHttpRequest.prototype.open;
-      const originalSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-      const originalSend = XMLHttpRequest.prototype.send;
-      
-      XMLHttpRequest.prototype.open = function(method, url) {
-        this._url = url;
-        this._headers = {};
-        return originalOpen.apply(this, arguments);
-      };
-      
-      XMLHttpRequest.prototype.setRequestHeader = function(header, value) {
-        this._headers[header.toLowerCase()] = value;
-        if (this._url && this._url.includes('/d2l/api/') && header.toLowerCase() === 'authorization' && value.startsWith('Bearer ')) {
-          sendToken(value.substring(7));
-        }
-        return originalSetHeader.apply(this, arguments);
-      };
-      
-      XMLHttpRequest.prototype.send = function() {
-        if (this._url && this._url.includes('/d2l/api/')) {
-          const auth = this._headers['authorization'];
-          if (auth && auth.startsWith('Bearer ')) {
-            sendToken(auth.substring(7));
-          }
-        }
-        return originalSend.apply(this, arguments);
-      };
-
-      // Auto-login
-      const NOTE_USER = ${JSON.stringify(username || '')};
-      const NOTE_PASS = ${JSON.stringify(password || '')};
-      
-      if (NOTE_USER && NOTE_PASS) {
-        const isLoginPage = window.location.href.includes('login') || 
-                           window.location.href.includes('microsoftonline') || 
-                           window.location.href.includes('sso') || 
-                           window.location.href.includes('adfs');
+      try {
+        // Get all cookies for the current URL
+        const cookies = await CookieManager.get(navState.url, true);
+        console.log('[D2L WebView] Retrieved cookies:', Object.keys(cookies));
         
-        if (isLoginPage) {
-          setTimeout(function() {
-            // Find username
-            const usernameField = document.querySelector('input#userNameInput') || 
-                                 document.querySelector('input[name="UserName"]') ||
-                                 document.querySelector('input[type="email"]') ||
-                                 document.querySelector('input[name="username"]');
-            
-            if (usernameField) {
-              usernameField.value = NOTE_USER;
-              usernameField.dispatchEvent(new Event('input', { bubbles: true }));
-              
-              setTimeout(function() {
-                // Click Next or press Enter
-                const nextBtn = document.querySelector('input[type="submit"]') || 
-                               document.querySelector('button[type="submit"]');
-                if (nextBtn) {
-                  nextBtn.click();
-                } else {
-                  usernameField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                }
-                
-                setTimeout(function() {
-                  // Find password
-                  const passwordField = document.querySelector('input#passwordInput') || 
-                                       document.querySelector('input[name="Password"]') ||
-                                       document.querySelector('input[type="password"]');
-                  
-                  if (passwordField) {
-                    passwordField.value = NOTE_PASS;
-                    passwordField.dispatchEvent(new Event('input', { bubbles: true }));
-                    
-                    setTimeout(function() {
-                      // Submit
-                      const submitBtn = document.querySelector('input[type="submit"]') || 
-                                       document.querySelector('button[type="submit"]');
-                      if (submitBtn) {
-                        submitBtn.click();
-                      } else {
-                        passwordField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                      }
-                    }, 500);
-                  }
-                }, 2000);
-              }, 500);
-            }
-          }, 1000);
-        }
-      }
-
-      // Check cookies immediately and then every 2 seconds
-      function checkCookies() {
-        if (tokenCaptured) {
-          console.log('[COOKIE CHECK] Token already captured, skipping');
-          return false;
-        }
-        try {
-          const cookies = document.cookie;
-          console.log('[COOKIE CHECK] Checking cookies, length:', cookies ? cookies.length : 0);
-          console.log('[COOKIE CHECK] All cookies:', cookies);
+        // Extract the two required cookies
+        const d2lSessionVal = cookies.d2lSessionVal?.value;
+        const d2lSecureSessionVal = cookies.d2lSecureSessionVal?.value;
+        
+        if (d2lSessionVal && d2lSecureSessionVal) {
+          // Format cookies as a cookie string
+          const cookieString = `d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`;
+          console.log('[D2L WebView] Both required cookies found!');
+          setCapturedCookies(cookieString);
           
-          if (cookies && (cookies.includes('d2lSessionVal') || cookies.includes('d2lSecureSessionVal'))) {
-            const sessionVal = cookies.match(/d2lSessionVal=([^;]+)/)?.[1];
-            const secureSessionVal = cookies.match(/d2lSecureSessionVal=([^;]+)/)?.[1];
-            console.log('[COOKIE CHECK] Found - sessionVal:', sessionVal ? 'YES' : 'NO', 'secureSessionVal:', secureSessionVal ? 'YES' : 'NO');
-            
-            if (sessionVal || secureSessionVal) {
-              let cookieString = '';
-              if (sessionVal) cookieString += 'd2lSessionVal=' + sessionVal;
-              if (secureSessionVal) {
-                if (cookieString) cookieString += '; ';
-                cookieString += 'd2lSecureSessionVal=' + secureSessionVal;
-              }
-              console.log('[COOKIE CHECK] Sending cookies!');
-              sendCookies(cookieString);
-              return true;
-            }
-          } else {
-            console.log('[COOKIE CHECK] No D2L cookies found');
+          // Automatically connect and navigate back
+          if (!submitting) {
+            setTimeout(() => handleSubmit(cookieString), 500);
           }
-        } catch (e) {
-          console.error('[COOKIE CHECK] Error:', e);
+        } else {
+          console.log('[D2L WebView] Missing required cookies. Found:', {
+            d2lSessionVal: !!d2lSessionVal,
+            d2lSecureSessionVal: !!d2lSecureSessionVal,
+          });
         }
-        return false;
+      } catch (error: any) {
+        console.error('[D2L WebView] Error capturing cookies:', error);
+        Alert.alert('Error', 'Failed to capture session cookies. Please try again.');
       }
-
-      console.log('[INJECT] Script loaded, starting cookie checks...');
-      
-      // Check immediately
-      setTimeout(function() {
-        console.log('[COOKIE CHECK] Initial check...');
-        checkCookies();
-      }, 1000);
-
-      // Check every 2 seconds
-      let checkCount = 0;
-      const cookieCheck = setInterval(function() {
-        checkCount++;
-        console.log('[COOKIE CHECK] Interval check #' + checkCount);
-        
-        if (tokenCaptured) {
-          console.log('[COOKIE CHECK] Token captured, stopping');
-          clearInterval(cookieCheck);
-          return;
-        }
-        
-        if (checkCount > 60) {
-          console.log('[COOKIE CHECK] Max checks reached, final check...');
-          clearInterval(cookieCheck);
-          checkCookies();
-          return;
-        }
-        
-        checkCookies();
-      }, 2000);
-    })();
-    true;
-  `;
-
-  const handleMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      console.log('[D2L WebView] Message received:', data.type);
-
-      if (data.type === 'TOKEN_CAPTURED' && data.token) {
-        console.log('[D2L WebView] TOKEN CAPTURED!');
-        setCapturedToken(data.token);
-        if (!submitting) {
-          setTimeout(() => handleSubmit(), 500);
-        }
-      } else if (data.type === 'COOKIES_CAPTURED' && data.cookies) {
-        console.log('[D2L WebView] COOKIES CAPTURED!', data.cookies.substring(0, 50));
-        setCapturedCookies(data.cookies);
-        if (!submitting) {
-          setTimeout(() => handleSubmit(), 500);
-        }
-      }
-    } catch (e) {
-      console.error('[D2L WebView] Error parsing message:', e);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!capturedToken && !capturedCookies) {
+  const handleSubmit = async (cookieString?: string) => {
+    const cookiesToUse = cookieString || capturedCookies;
+    
+    if (!cookiesToUse) {
       Alert.alert('No Credentials', 'Please log in first.');
       return;
     }
 
     setSubmitting(true);
     try {
-      if (capturedCookies) {
-        await d2lService.connectWithCookies({ host, cookies: capturedCookies });
-      } else {
-        await d2lService.connectWithToken({ host, token: capturedToken || "" });
-      }
-
-      Alert.alert('Success', 'D2L connected!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      await d2lService.connectWithCookies({ host, cookies: cookiesToUse });
+      
+      // Automatically navigate back to dashboard on success
+      // No alert needed - smooth transition
+      navigation.goBack();
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to connect');
       setSubmitting(false);
@@ -301,23 +112,36 @@ export default function D2LWebViewScreen({ route }: D2LWebViewScreenProps) {
         ref={webViewRef}
         source={{ uri: d2lUrl }}
         style={styles.webview}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
-        onMessage={handleMessage}
-        injectedJavaScript={injectedJavaScript}
+        onLoadStart={() => {
+          setLoading(true);
+          console.log('[D2L WebView] Load started');
+        }}
+        onLoadEnd={() => {
+          setLoading(false);
+          console.log('[D2L WebView] Load ended');
+        }}
+        onNavigationStateChange={handleNavigationStateChange}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('[D2L WebView] Error:', nativeEvent);
+        }}
+        onHttpError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('[D2L WebView] HTTP Error:', nativeEvent);
+        }}
       />
 
       <View style={styles.footer}>
-        {capturedToken || capturedCookies ? (
+        {capturedCookies ? (
           <View style={styles.tokenStatus}>
             <AntDesign name="checkcircle" size={20} color="#10b981" />
-            <Text style={styles.tokenStatusText}>Credentials captured!</Text>
+            <Text style={styles.tokenStatusText}>Session captured! Connecting...</Text>
           </View>
         ) : (
           <View style={styles.tokenStatus}>
-            <AntDesign name="infocircle" size={20} color="#6366f1" />
+            <AntDesign name="info" size={20} color="#6366f1" />
             <Text style={styles.tokenStatusText}>
               {username && password ? 'Auto-login in progress...' : 'Please log in to D2L'}
             </Text>
@@ -325,9 +149,9 @@ export default function D2LWebViewScreen({ route }: D2LWebViewScreenProps) {
         )}
 
         <TouchableOpacity
-          style={[styles.connectButton, (!capturedToken && !capturedCookies || submitting) && styles.connectButtonDisabled]}
-          onPress={handleSubmit}
-          disabled={(!capturedToken && !capturedCookies) || submitting}
+          style={[styles.connectButton, (!capturedCookies || submitting) && styles.connectButtonDisabled]}
+          onPress={() => handleSubmit()}
+          disabled={!capturedCookies || submitting}
         >
           {submitting ? (
             <ActivityIndicator color="#fff" />
