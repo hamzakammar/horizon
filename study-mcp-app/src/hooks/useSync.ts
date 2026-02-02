@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../services/supabase';
+import { apiClient } from '../config/api';
 
 export const useSync = () => {
   const [syncing, setSyncing] = useState(false);
@@ -7,15 +7,8 @@ export const useSync = () => {
   const syncD2L = async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('study-logic', {
-        method: 'POST',
-        path: '/d2l/sync',
-      });
-      if (error) {
-        console.error('Error syncing D2L:', error);
-      } else {
-        console.log('D2L sync complete:', data);
-      }
+      const { data } = await apiClient.post('/d2l/sync');
+      console.log('D2L sync complete:', data);
     } catch (error) {
       console.error('Unexpected error during D2L sync:', error);
     } finally {

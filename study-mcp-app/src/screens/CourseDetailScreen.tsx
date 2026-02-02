@@ -88,9 +88,13 @@ export default function CourseDetailScreen() {
 
   useEffect(() => {
     if (course) {
-      loadAnnouncements();
+      if (activeTab === 'announcements') {
+        loadAnnouncements();
+      } else if (activeTab === 'grades') {
+        loadGrades();
+      }
     }
-  }, [course]);
+  }, [course, activeTab]); 
 
   if (!course) {
     return (

@@ -19,7 +19,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Initial session check
     initializeAuth();
+
+    // Listen for auth changes (Login, Logout, Token Refresh)
+    const { data: { subscription } } = authService.listenToAuthChanges((session) => {
+      if (session) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || '',
+        });
+        setIsAuthenticated(true);
+      } else {
+        setUser(null);
+        setIsAuthenticated(false);
+      }
+      setIsLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const initializeAuth = async () => {

@@ -13,8 +13,8 @@ export class PiazzaService {
    */
   private async checkBackendHealth(): Promise<boolean> {
     try {
-      const response = await apiClient.get('/health', { timeout: 5000 });
-      return response.status === 200;
+      await apiClient.get('/health', { timeout: 5000 });
+      return true;
     } catch (error) {
       console.error('[Piazza] Backend health check failed:', error);
       return false;
@@ -26,7 +26,7 @@ export class PiazzaService {
    */
   async getStatus(): Promise<PiazzaStatus> {
     try {
-      const response = await apiClient.get<any>('/api/piazza/status');
+      const response = await apiClient.get<any>('/piazza/status');
       return {
         connected: response.data.connected || false,
         syncing: false,
@@ -35,7 +35,6 @@ export class PiazzaService {
       };
     } catch (error: any) {
       console.error('Error getting Piazza status:', error);
-      // Return default status on error
       return {
         connected: false,
         syncing: false,
@@ -45,41 +44,22 @@ export class PiazzaService {
   }
 
   /**
-   * Connect to Piazza (store credentials or trigger browser login)
+   * Connect to Piazza (store credentials)
    */
   async connect(credentials: { email: string; password: string }): Promise<void> {
     try {
       console.log('[Piazza] Attempting to connect...');
-      
-      // Check if backend is reachable first
+
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
-        throw new Error('Cannot reach backend server. Please make sure the backend is running on ' + 
-          (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.hamzaammar.ca'));
+        throw new Error('Cannot reach backend server. Please make sure the backend is running.');
       }
-      
-      const response = await supabase.functions.invoke('study-logic', {
-        method: 'POST',
-        path: '/piazza/connect',
-        body: credentials,
-      });
-      if (response.error) {
-        throw new Error(response.error.message || 'Failed to connect to Piazza');
-      }
+
+      await apiClient.post('/piazza/connect', credentials);
       console.log('[Piazza] Connection successful');
     } catch (error: any) {
       console.error('[Piazza] Connection error:', error);
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {
-        throw error; // Re-throw our custom error
-      }
-      if (error.response?.status === 404) {
-        throw new Error('API endpoint not found. Make sure the backend server is running and the API base URL is correct.');
-      }
-      if (error.response?.status === 401) {
-        throw new Error('Authentication failed. Please log out and log back in.');
-      }
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to connect to Piazza';
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -92,32 +72,14 @@ export class PiazzaService {
 
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
-        throw new Error('Cannot reach backend server. Please make sure the backend is running on ' +
-          process.env.EXPO_PUBLIC_SUPABASE_URL);
+        throw new Error('Cannot reach backend server. Please make sure the backend is running.');
       }
 
-      const response = await supabase.functions.invoke('study-logic', {
-        method: 'POST',
-        path: '/piazza/connect-cookie',
-        body: payload,
-      });
-      if (response.error) {
-        throw new Error(response.error.message || 'Failed to store cookies');
-      }
+      await apiClient.post('/piazza/connect-cookie', payload);
       console.log('[Piazza] Cookies stored successfully');
     } catch (error: any) {
       console.error('[Piazza] Cookie storage error:', error);
-      if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {
-        throw error;
-      }
-      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        throw new Error('Connection timeout. Please try again.');
-      }
-      if (error.response?.status === 400) {
-        throw new Error(error.response.data?.error || 'Invalid or expired cookies');
-      }
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to store cookies';
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -126,34 +88,10 @@ export class PiazzaService {
    */
   async syncAll(): Promise<void> {
     try {
-      const response = await apiClient.post('/api/piazza/sync');
-      if (response.status !== 200) {
-        throw new Error(response.data?.message || response.data?.error || 'Failed to sync Piazza data');
-      }
+      await apiClient.post('/piazza/sync');
     } catch (error: any) {
       console.error('[Piazza] Sync error:', error);
-      console.error('[Piazza] Sync error response:', error.response?.data);
-      
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to sync Piazza data';
-      const result = error.response?.data?.result;
-      
-      // Check if sync result indicates re-auth is required
-      if (result && typeof result === 'string') {
-        try {
-          const parsed = JSON.parse(result);
-          if (parsed.requiresReauth || errorMessage.includes('authentication') || errorMessage.includes('re-authenticate')) {
-            throw new Error('Piazza authentication expired. Please reconnect via Settings → Piazza → Connect.');
-          }
-        } catch {
-          // Not JSON, continue with original error
-        }
-      }
-      
-      if (errorMessage.includes('authentication') || errorMessage.includes('re-authenticate') || errorMessage.includes('Please re-authenticate')) {
-        throw new Error('Piazza authentication expired. Please reconnect via Settings → Piazza → Connect.');
-      }
-      
-      throw new Error(errorMessage);
+      throw error;
     }
   }
 
@@ -161,19 +99,14 @@ export class PiazzaService {
    * Embed missing Piazza posts
    */
   async embedMissing(): Promise<void> {
-    // TODO: Implement API endpoint: POST /api/piazza/embed-missing
-    const response = await apiClient.post('/api/piazza/embed-missing');
-    if (response.status !== 200) {
-      throw new Error('Failed to embed Piazza posts');
-    }
+    await apiClient.post('/piazza/embed-missing');
   }
 
   /**
    * Search Piazza posts
    */
   async search(query: string, courseId?: string): Promise<any[]> {
-    // TODO: Implement API endpoint: GET /api/piazza/search?q=...
-    const response = await apiClient.get('/api/piazza/search', {
+    const response = await apiClient.get('/piazza/search', {
       params: { q: query, courseId },
     });
     return response.data.hits || [];
@@ -184,10 +117,7 @@ export class PiazzaService {
    */
   async disconnect(): Promise<void> {
     try {
-      const response = await apiClient.delete('/api/piazza/disconnect');
-      if (response.status !== 200) {
-        throw new Error(response.data?.error || 'Failed to disconnect Piazza');
-      }
+      await apiClient.delete('/piazza/disconnect');
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to disconnect Piazza';
       throw new Error(errorMessage);

@@ -1,18 +1,21 @@
-// Centralized theme for Study MCP
+// Centralized theme for Horizon
 export const colors = {
-  primary: '#6366f1',
-  secondary: '#8b5cf6',
-  accent: '#10b981',
-  error: '#ef4444',
-  warning: '#f59e42',
-  info: '#64748b',
-  background: '#f8fafc',
-  card: '#ffffff',
-  border: '#e2e8f0',
-  text: '#1e293b',
-  muted: '#94a3b8',
-  light: '#f1f5f9',
-  placeholder: '#cbd5e1',
+  primary: '#1A2340', // Deep navy (background)
+  secondary: '#2D5D8C', // Mid blue (hills)
+  accent: '#2EC4D6', // Aqua/cyan (accent)
+  sun: '#FDBB4D', // Warm yellow/orange (sun)
+  gradientStart: '#2D5D8C', // Gradient blue start
+  gradientEnd: '#4FC3F7', // Gradient blue end
+  error: '#EF4444',
+  warning: '#FDBB4D',
+  info: '#4FC3F7',
+  background: '#F6FAFF', // Very light blue/white
+  card: '#FFFFFF',
+  border: '#D1E3F8',
+  text: '#1A2340', // Deep navy for text
+  muted: '#7B8FA1',
+  light: '#EAF4FB',
+  placeholder: '#B6C6D7',
 };
 
 export const spacing = {

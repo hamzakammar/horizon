@@ -17,17 +17,6 @@ import { d2lService } from '../services/d2l';
 import { piazzaService } from '../services/piazza';
 import { notesService } from '../services/notes';
 
-// --- BEGIN: UI from commit 44171c83f47567c0bcd3796b7a15295fd1da6c69 ---
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { AntDesign } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
-import { d2lService } from '../services/d2l';
-import { piazzaService } from '../services/piazza';
-import { notesService } from '../services/notes';
-
 interface IntegrationStatus {
   connected: boolean;
   syncing: boolean;
@@ -40,9 +29,11 @@ export default function SettingsScreen() {
   const [d2lStatus, setD2lStatus] = useState<IntegrationStatus>({ connected: false, syncing: false });
   const [piazzaStatus, setPiazzaStatus] = useState<IntegrationStatus>({ connected: false, syncing: false });
 
-  useEffect(() => {
-    loadIntegrationStatus();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadIntegrationStatus();
+    }, [])
+  );
 
   const loadIntegrationStatus = async () => {
     try {
@@ -481,26 +472,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  actionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  actionButtonSubtext: {
-    fontSize: 14,
-    color: '#64748b',
-    lineHeight: 20,
-  },
-  logoutButton: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#fee2e2',
-  },
-  logoutButtonText: {
-    color: '#ef4444',
-  },
-});
-// --- END: UI from commit 44171c83f47567c0bcd3796b7a15295fd1da6c69 ---
   actionButtonText: {
     fontSize: 16,
     fontWeight: '600',

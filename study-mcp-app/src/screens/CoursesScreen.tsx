@@ -11,6 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign } from '@expo/vector-icons';
 import { d2lService } from '../services/d2l';
+import { colors } from '../theme';
 
 interface Course {
     id: string;
@@ -32,6 +33,7 @@ export default function CoursesScreen() {
             const data = await d2lService.getCourses();
             setCourses(data);
         } catch (err: any) {
+            console.error("Course Load Error:", err);
             setError(err.message || 'Failed to load courses');
         } finally {
             setLoading(false);
@@ -48,6 +50,7 @@ export default function CoursesScreen() {
         loadCourses();
     };
 
+    // FIX: renderCourseCard must be defined
     const renderCourseCard = ({ item }: { item: Course }) => (
         <TouchableOpacity
             style={styles.courseCard}
@@ -57,44 +60,55 @@ export default function CoursesScreen() {
                 <AntDesign name="book" size={24} color="#6366f1" />
             </View>
             <View style={styles.courseInfo}>
-                <Text style={styles.courseName}>{item.name}</Text>
+                <Text style={styles.courseName} numberOfLines={1}>{item.name}</Text>
                 <Text style={styles.courseCode}>{item.code}</Text>
             </View>
             <AntDesign name="right" size={20} color="#94a3b8" />
         </TouchableOpacity>
     );
 
-    if (loading) {
+    if (loading && !refreshing) {
         return (
             <View style={styles.centerContainer}>
                 <ActivityIndicator size="large" color="#6366f1" />
-                <Text style={styles.loadingText}>Loading courses...</Text>
+                <Text style={styles.loadingText}>Fetching your classes...</Text>
             </View>
         );
     }
 
     return (
         <View style={styles.container}>
+            {error && (
+                <View style={styles.errorBanner}>
+                    <Text style={styles.errorText} numberOfLines={1}>{error}</Text>
+                    <TouchableOpacity onPress={loadCourses}>
+                        <Text style={styles.retryText}>Retry</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <FlatList
                 data={courses}
                 renderItem={renderCourseCard}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.id.toString()}
                 contentContainerStyle={styles.listContent}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />
                 }
                 ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <AntDesign name="inbox" size={64} color="#cbd5e1" />
-                        <Text style={styles.emptyText}>No courses found</Text>
-                        <Text style={styles.emptySubtext}>Connect your D2L account to see your courses</Text>
-                        <TouchableOpacity
-                            style={styles.connectButton}
-                            onPress={() => navigation.navigate('Sync' as never)}
-                        >
-                            <Text style={styles.connectButtonText}>Go to Integrations</Text>
-                        </TouchableOpacity>
-                    </View>
+                    !error ? (
+                        <View style={styles.emptyContainer}>
+                            <AntDesign name="inbox" size={64} color="#cbd5e1" />
+                            <Text style={styles.emptyHeader}>No courses found</Text>
+                            <Text style={styles.emptySubtext}>Connect your D2L account to sync your studies</Text>
+                            <TouchableOpacity
+                                style={styles.connectButton}
+                                onPress={() => (navigation.navigate as any)('Sync')}
+                            >
+                                <Text style={styles.connectButtonText}>Go to Integrations</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : null
                 }
             />
         </View>
@@ -128,11 +142,6 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 16,
         marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
         borderWidth: 1,
         borderColor: '#e2e8f0',
     },
@@ -164,7 +173,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingTop: 80,
     },
-    emptyText: {
+    errorBanner: {
+        backgroundColor: '#fee2e2',
+        padding: 12,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    errorText: {
+        color: '#b91c1c',
+        fontSize: 14,
+        flex: 1,
+    },
+    retryText: {
+        color: '#b91c1c',
+        fontWeight: '700',
+        marginLeft: 12,
+    },
+    emptyHeader: {
         fontSize: 18,
         fontWeight: '700',
         color: '#1e293b',

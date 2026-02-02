@@ -3,7 +3,7 @@ import { DashboardResponse } from '../types';
 
 export class DashboardService {
   async getDashboard(): Promise<DashboardResponse> {
-    const response = await apiClient.get<DashboardResponse>('/api/dashboard');
+    const response = await apiClient.get<DashboardResponse>('/dashboard');
     return response.data;
   }
 }

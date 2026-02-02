@@ -62,7 +62,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
     // Register token with backend
     try {
       const platform = Platform.OS === 'ios' ? 'ios' : 'android';
-      await apiClient.post('/api/push/register', {
+      await apiClient.post('/push/register', {
         deviceToken: token,
         platform,
       });

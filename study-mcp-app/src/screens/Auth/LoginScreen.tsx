@@ -27,16 +27,9 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const result = await authService.handleLogin(email, password);
-      if (result?.user) {
-        console.log('Redirecting to MainTabs...');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
-      } else {
-        Alert.alert('Login Failed', 'Unable to log in. Please try again.');
-      }
+      await login(email, password);
+      // No manual redirect needed anymore!
+      // AuthProvider will update isAuthenticated and AppNavigator will switch stacks
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'An error occurred');
     } finally {
@@ -46,7 +39,7 @@ export default function LoginScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Study MCP</Text>
+      <Text style={styles.title}>Horizon</Text>
       <Text style={styles.subtitle}>Sign in to continue</Text>
 
       <TextInput

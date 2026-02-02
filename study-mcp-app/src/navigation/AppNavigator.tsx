@@ -129,6 +129,14 @@ export default function AppNavigator() {
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
           <Stack.Screen
+            name="Courses"
+            component={CoursesScreen}
+            options={{
+              headerShown: true,
+              title: 'My Courses',
+            }}
+          />
+          <Stack.Screen
             name="Upload"
             component={UploadScreen}
             options={{

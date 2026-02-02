@@ -1,46 +1,49 @@
-import { supabase } from '../services/supabase';
-
-// Get API URL from environment or use defaults
-const API_BASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
-
-// Always log the API URL for debugging
-console.log('[API] Base URL:', API_BASE_URL);
-console.log('[API] __DEV__:', __DEV__);
-console.log('[API] EXPO_PUBLIC_SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL || 'not set');
+import { supabase } from '../lib/supabase';
 
 export const apiClient = {
-  get: async <T = any>(path: string, options = {}) => {
-    const { data, error } = await supabase.functions.invoke('study-logic', {
-      method: 'GET',
-      headers: {
-        'x-path': path,
-      },
-      ...options,
-    });
-    if (error) throw error;
-    return { data: data as T };
-  },
-  post: async <T = any>(path: string, body?: any, options = {}) => {
-    const { data, error } = await supabase.functions.invoke('study-logic', {
-      method: 'POST',
-      headers: {
-        'x-path': path,
-      },
+
+  invoke: async (path: string, method: string, body?: any, options: any = {}) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // 1. Remove leading slash if present to avoid double slashes
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+
+    // 2. ONLY use the function name 'study-logic'. 
+    // The path after the slash is the sub-route.
+    return await supabase.functions.invoke(`study-logic/${cleanPath}`, {
+      method,
       body,
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`,
+        ...options.headers,
+      },
       ...options,
     });
-    if (error) throw error;
-    return { data: data as T };
   },
-  delete: async <T = any>(path: string, options = {}) => {
+
+  get: (path: string, options?: any) => apiClient.invoke(path, 'GET', undefined, options),
+
+  post: (path: string, body?: any, options?: any) => apiClient.invoke(path, 'POST', body, options),
+
+  delete: async <T = any>(path: string, options: any = {}) => {
+    // Session Check: Call getSession() immediately before invoke
+    const { data: { session } } = await supabase.auth.getSession();
+
     const { data, error } = await supabase.functions.invoke('study-logic', {
       method: 'DELETE',
       headers: {
-        'x-path': path,
+        'Authorization': `Bearer ${session?.access_token}`,
+        ...options.headers,
       },
       ...options,
+      path: path.startsWith('/') ? path : `/${path}`,
     });
-    if (error) throw error;
+
+    if (error) {
+      console.error(`[API] DELETE ${path} failed:`, error);
+      throw { name: 'FunctionsHttpError', status: error.status || 500, ...error };
+    }
+
     return { data: data as T };
   },
 };

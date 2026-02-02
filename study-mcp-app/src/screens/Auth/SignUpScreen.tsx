@@ -34,9 +34,9 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      await authService.handleSignUp(email, password);
-      Alert.alert('Success', 'Account created successfully!');
-      navigation.navigate('Login');
+      await signUp(email, password, name);
+      // No manual redirect needed!
+      // AuthProvider will update isAuthenticated and AppNavigator will switch stacks
     } catch (error: any) {
       Alert.alert('Sign Up Failed', error.message || 'An error occurred');
     } finally {

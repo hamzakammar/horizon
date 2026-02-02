@@ -73,8 +73,8 @@ export class AuthService {
     this.currentUser = user;
   }
 
-  async listenToAuthChanges(callback?: (session: any) => void): Promise<void> {
-    supabase.auth.onAuthStateChange((event, session) => {
+  listenToAuthChanges(callback?: (session: any) => void) {
+    return supabase.auth.onAuthStateChange((event, session) => {
       if (callback) callback(session);
     });
   }

@@ -74,7 +74,7 @@ export default function D2LWebViewScreen({ route }: any) {
       await d2lService.connectWithCookies({ host, cookies: cookiesToUse });
 
       // Trigger Edge Function sync
-      const { data, error } = await supabase.functions.invoke('study-logic', {
+      const { data, error } = await supabase.functions.invoke('study-logic/d2l/sync', {
         body: { action: 'sync_d2l', host, cookies: cookiesToUse },
       });
 

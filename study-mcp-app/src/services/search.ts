@@ -9,7 +9,7 @@ export interface SearchParams {
 
 export class SearchService {
   async search(params: SearchParams): Promise<SearchHit[]> {
-    const response = await apiClient.get<SearchResponse>('/api/search', {
+    const response = await apiClient.get<SearchResponse>('/search', {
       params: {
         q: params.q,
         courseId: params.courseId,

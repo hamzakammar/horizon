@@ -13,7 +13,7 @@ export class D2LService {
    */
   private async checkBackendHealth(): Promise<boolean> {
     try {
-      await apiClient.get('/health', { timeout: 5000 });
+      await apiClient.get('/study-logic/health', { timeout: 5000 });
       return true;
     } catch (error) {
       console.error('[D2L] Backend health check failed:', error);
@@ -26,7 +26,7 @@ export class D2LService {
    */
   async getStatus(): Promise<D2LStatus> {
     try {
-      const response = await apiClient.get<D2LStatus>('/api/d2l/status');
+      const response = await apiClient.get<D2LStatus>('/d2l/status');
       return {
         connected: response.data.connected || false,
         syncing: false,
@@ -119,7 +119,7 @@ export class D2LService {
       }
 
       // Set a longer timeout for authentication (90 seconds - Playwright can take a while)
-      await apiClient.post('/api/d2l/connect', credentials, {
+      await apiClient.post('/d2l/connect', credentials, {
         timeout: 90000, // 90 seconds
       });
       console.log('[D2L] Connection successful');
@@ -147,7 +147,7 @@ export class D2LService {
    */
   async syncAll(): Promise<void> {
     try {
-      await apiClient.post('/api/d2l/sync');
+      await apiClient.post('/d2l/sync');
     } catch (error: any) {
       console.error('[D2L] Sync error:', error);
       console.error('[D2L] Sync error response:', error.response?.data);
@@ -182,9 +182,9 @@ export class D2LService {
   /**
    * Get courses
    */
-  async getCourses(): Promise<any[]> {
+   async getCourses(): Promise<any[]> {
     try {
-      const response = await apiClient.get('/api/d2l/courses');
+      const response = await apiClient.get('/d2l/courses');
       return response.data.courses || [];
     } catch (error: any) {
       console.error('Error fetching courses:', error);
@@ -197,7 +197,7 @@ export class D2LService {
    */
   async getAnnouncements(courseId: string): Promise<any[]> {
     try {
-      const response = await apiClient.get(`/api/d2l/courses/${courseId}/announcements`);
+      const response = await apiClient.get(`/d2l/courses/${courseId}/announcements`);
       return response.data.announcements || [];
     } catch (error: any) {
       console.error('Error fetching announcements:', error);
@@ -210,7 +210,7 @@ export class D2LService {
    */
   async getAssignments(courseId: string): Promise<any[]> {
     try {
-      const response = await apiClient.get(`/api/d2l/courses/${courseId}/assignments`);
+      const response = await apiClient.get(`/d2l/courses/${courseId}/assignments`);
       return response.data.assignments || [];
     } catch (error: any) {
       console.error('Error fetching assignments:', error);
@@ -223,7 +223,7 @@ export class D2LService {
    */
   async getGrades(courseId: string): Promise<any[]> {
     try {
-      const response = await apiClient.get(`/api/d2l/courses/${courseId}/grades`);
+      const response = await apiClient.get(`/d2l/courses/${courseId}/grades`);
       return response.data.grades || [];
     } catch (error: any) {
       console.error('Error fetching grades:', error);
@@ -231,12 +231,13 @@ export class D2LService {
     }
   }
 
+
   /**
    * Disconnect D2L (remove stored credentials)
    */
   async disconnect(): Promise<void> {
     try {
-      await apiClient.delete('/api/d2l/disconnect');
+      await apiClient.delete('/d2l/disconnect');
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to disconnect D2L';
       throw new Error(errorMessage);

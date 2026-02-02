@@ -9,12 +9,14 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign } from '@expo/vector-icons';
 import { dashboardService } from '../services/dashboard';
 import { DashboardResponse, Note } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { colors } from '../theme';
 
 
 export default function DashboardScreen() {
@@ -73,7 +75,7 @@ export default function DashboardScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.accent} />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
     );
@@ -84,7 +86,7 @@ export default function DashboardScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
         {/* Header with gradient effect */}
         <View style={styles.header}>
@@ -113,7 +115,7 @@ export default function DashboardScreen() {
             </Text>
           </View>
           <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-            <AntDesign name="poweroff" size={16} color="#6366f1" style={{ marginRight: 6 }} />
+            <AntDesign name="poweroff" size={16} color={colors.accent} style={{ marginRight: 6 }} />
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
@@ -122,16 +124,16 @@ export default function DashboardScreen() {
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, styles.statCardPrimary]}>
             <View style={styles.statIconContainer}>
-              <AntDesign name="book" size={24} color="#6366f1" />
+              <AntDesign name="book" size={24} color={colors.accent} />
             </View>
-            <Text style={styles.statValue}>{dashboard?.stats.notesCount || 0}</Text>
+            <Text style={styles.statValue}>{dashboard?.stats?.notesCount || 0}</Text>
             <Text style={styles.statLabel}>Total Notes</Text>
           </View>
           <View style={[styles.statCard, styles.statCardSecondary]}>
             <View style={styles.statIconContainer}>
-              <AntDesign name="file-text" size={24} color="#8b5cf6" />
+              <AntDesign name="file-text" size={24} color={colors.secondary} />
             </View>
-            <Text style={styles.statValue}>{dashboard?.usage.totalChunks || 0}</Text>
+            <Text style={styles.statValue}>{dashboard?.usage?.totalChunks || 0}</Text>
             <Text style={styles.statLabel}>Chunks</Text>
           </View>
         </View>
@@ -145,13 +147,13 @@ export default function DashboardScreen() {
           >
             <View style={styles.coursesCardContent}>
               <View style={styles.coursesIconContainer}>
-                <AntDesign name="book" size={28} color="#6366f1" />
+                <AntDesign name="book" size={28} color={colors.accent} />
               </View>
               <View style={styles.coursesTextContainer}>
                 <Text style={styles.coursesTitle}>My Courses</Text>
                 <Text style={styles.coursesSubtitle}>View your D2L courses and announcements</Text>
               </View>
-              <AntDesign name="right" size={20} color="#94a3b8" />
+              <AntDesign name="right" size={20} color={colors.muted} />
             </View>
           </TouchableOpacity>
         </View>
@@ -164,7 +166,7 @@ export default function DashboardScreen() {
               <TouchableOpacity key={note.id} style={styles.noteCard} activeOpacity={0.7}>
                 <View style={styles.noteCardHeader}>
                   <View style={styles.noteIcon}>
-                    <AntDesign name="file-text" size={20} color="#6366f1" />
+                    <AntDesign name="file-text" size={20} color={colors.accent} />
                   </View>
                   <View style={styles.noteContent}>
                     <Text style={styles.noteTitle} numberOfLines={1}>{note.title}</Text>
@@ -193,7 +195,7 @@ export default function DashboardScreen() {
             ))
           ) : (
             <View style={styles.emptyState}>
-              <AntDesign name="mail" size={48} color="#94a3b8" />
+              <AntDesign name="mail" size={48} color={colors.muted} />
               <Text style={styles.emptyText}>No notes yet</Text>
               <Text style={styles.emptySubtext}>Upload your first note to get started</Text>
             </View>
@@ -207,7 +209,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
@@ -219,12 +221,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#64748b',
+    color: colors.info,
   },
   header: {
     flexDirection: 'row',
@@ -233,20 +235,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 8,
     paddingBottom: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   greeting: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.info,
     marginBottom: 4,
     fontWeight: '500',
   },
   userName: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.text,
     textTransform: 'capitalize',
   },
   logoutButton: {
@@ -255,10 +257,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.light,
   },
   logoutText: {
-    color: '#6366f1',
+    color: colors.accent,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -270,7 +272,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -282,17 +284,17 @@ const styles = StyleSheet.create({
   },
   statCardPrimary: {
     borderLeftWidth: 4,
-    borderLeftColor: '#6366f1',
+    borderLeftColor: colors.accent,
   },
   statCardSecondary: {
     borderLeftWidth: 4,
-    borderLeftColor: '#8b5cf6',
+    borderLeftColor: colors.secondary,
   },
   statIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -300,12 +302,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.text,
     marginBottom: 4,
   },
   statLabel: {
     fontSize: 13,
-    color: '#64748b',
+    color: colors.info,
     fontWeight: '500',
   },
   section: {
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   noteCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -329,7 +331,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   noteCardHeader: {
     flexDirection: 'row',
@@ -340,7 +342,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -351,12 +353,12 @@ const styles = StyleSheet.create({
   noteTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: colors.text,
     marginBottom: 6,
   },
   courseBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#ede9fe',
+    backgroundColor: colors.light,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -364,7 +366,7 @@ const styles = StyleSheet.create({
   courseText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6366f1',
+    color: colors.accent,
   },
   noteFooter: {
     flexDirection: 'row',
@@ -372,26 +374,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: colors.light,
   },
   noteDate: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: colors.muted,
     fontWeight: '500',
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.light,
   },
   statusReady: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: '#dcfce7', // Consider using a Horizon accent if needed
   },
   statusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b',
+    color: colors.info,
     textTransform: 'capitalize',
   },
   emptyState: {
@@ -402,16 +404,16 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1e293b',
+    color: colors.text,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.info,
     textAlign: 'center',
   },
   coursesCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
@@ -421,7 +423,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     borderLeftWidth: 4,
-    borderLeftColor: '#6366f1',
+    borderLeftColor: colors.accent,
   },
   coursesCardContent: {
     flexDirection: 'row',
@@ -431,7 +433,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#eef2ff',
+    backgroundColor: colors.light,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -442,11 +444,11 @@ const styles = StyleSheet.create({
   coursesTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.text,
     marginBottom: 4,
   },
   coursesSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.info,
   },
 });
