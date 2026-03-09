@@ -1075,6 +1075,91 @@ router.get("/d2l/courses/:courseId/grades", async (req: Request, res: Response) 
   }
 });
 
+/** GET /api/d2l/courses/:courseId/content — Get content table of contents for a course */
+router.get("/d2l/courses/:courseId/content", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { courseId } = req.params;
+  const orgUnitId = parseInt(courseId, 10);
+
+  if (isNaN(orgUnitId)) {
+    res.status(400).json({ error: "Invalid course ID" });
+    return;
+  }
+
+  try {
+    const { data: credsData } = await supabase
+      .from("user_credentials")
+      .select("host")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .limit(1);
+
+    const creds = Array.isArray(credsData) ? credsData[0] : credsData;
+    if (!creds) {
+      res.status(404).json({ error: "D2L credentials not found. Please connect D2L first." });
+      return;
+    }
+
+    const client = new D2LClient(userId, creds.host);
+    const toc = await client.getContentToc(orgUnitId) as any;
+    const { marshalToc } = await import("../utils/marshal.js");
+    const modules = marshalToc(toc);
+
+    res.json({ modules });
+  } catch (e: any) {
+    console.error("[API] d2l/courses/:courseId/content error:", e);
+    if (e.message === "REAUTH_REQUIRED" || e.message?.includes("REAUTH_REQUIRED")) {
+      res.status(401).json({ error: "REAUTH_REQUIRED", message: "Your D2L session has expired. Please sign in again." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to fetch course content", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+/** GET /api/piazza/posts — Get stored Piazza posts for a user (from DB) */
+router.get("/piazza/posts", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const courseId = req.query.courseId as string | undefined;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+
+  try {
+    let query = supabase
+      .from("piazza_posts")
+      .select("id, course_id, post_id, title, body, url, created_at, updated_at, metadata")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    if (courseId) query = query.eq("course_id", courseId);
+
+    const { data: posts, error } = await query;
+
+    if (error) {
+      console.error("[API] piazza/posts error:", error);
+      res.status(500).json({ error: "Failed to fetch Piazza posts" });
+      return;
+    }
+
+    res.json({
+      posts: (posts ?? []).map((p: any) => ({
+        id: p.id,
+        postId: p.post_id,
+        courseId: p.course_id,
+        title: p.title,
+        snippet: p.body ? p.body.slice(0, 200) : null,
+        url: p.url,
+        date: p.updated_at || p.created_at,
+        type: p.metadata?.type || 'post',
+        answered: p.metadata?.answered ?? undefined,
+        author: p.metadata?.author ?? undefined,
+      })),
+    });
+  } catch (e) {
+    console.error("[API] piazza/posts error:", e);
+    res.status(500).json({ error: "Failed to fetch Piazza posts", details: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 /** POST /api/piazza/connect — Store Piazza credentials for user */
 router.post("/piazza/connect", async (req: Request, res: Response) => {
   const userId = req.userId!;
@@ -1411,8 +1496,39 @@ router.get("/piazza/search", async (req: Request, res: Response) => {
   const courseId = (req.query.courseId as string) || undefined;
   const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
 
+  // If no query, fall back to listing recent posts from DB
   if (!q) {
-    res.status(400).json({ error: "query q required" });
+    try {
+      let query = supabase
+        .from("piazza_posts")
+        .select("id, course_id, post_id, title, body, url, created_at, updated_at, metadata")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(limit);
+
+      if (courseId) query = query.eq("course_id", courseId);
+
+      const { data: posts, error } = await query;
+      if (error) {
+        res.status(500).json({ error: "Failed to fetch posts" });
+        return;
+      }
+
+      const hits = (posts ?? []).map((p: any) => ({
+        postId: p.post_id,
+        title: p.title,
+        snippet: p.body ? p.body.slice(0, 200) : null,
+        url: p.url,
+        score: 1,
+        courseId: p.course_id,
+        date: p.updated_at || p.created_at,
+        type: p.metadata?.type || 'post',
+        answered: p.metadata?.answered ?? undefined,
+      }));
+      res.json({ hits });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch posts" });
+    }
     return;
   }
 
@@ -1427,7 +1543,6 @@ router.get("/piazza/search", async (req: Request, res: Response) => {
     const parsed = JSON.parse(result);
 
     if (parsed.success && parsed.results) {
-      // Transform results to match expected format
       const hits = (parsed.results || []).map((r: any) => ({
         postId: r.post_id || r.id,
         title: r.title,

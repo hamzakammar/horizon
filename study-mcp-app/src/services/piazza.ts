@@ -103,6 +103,17 @@ export class PiazzaService {
   }
 
   /**
+   * Get stored Piazza posts from DB (feed)
+   */
+  async getPosts(courseId?: string, limit?: number): Promise<any[]> {
+    const params: any = {};
+    if (courseId) params.courseId = courseId;
+    if (limit) params.limit = limit;
+    const response = await apiClient.get('/piazza/posts', { params });
+    return response.data.posts || [];
+  }
+
+  /**
    * Search Piazza posts
    */
   async search(query: string, courseId?: string): Promise<any[]> {

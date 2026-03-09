@@ -238,7 +238,7 @@ export class D2LService {
   async getContent(courseId: string): Promise<any[]> {
     try {
       const response = await apiClient.get(`/d2l/courses/${courseId}/content`);
-      return response.data.modules || response.data.content || [];
+      return response.data.modules || [];
     } catch (error: any) {
       console.error('Error fetching content:', error);
       throw new Error(error.response?.data?.error || 'Failed to fetch course content');

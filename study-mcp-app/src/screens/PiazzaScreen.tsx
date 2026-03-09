@@ -48,8 +48,7 @@ export default function PiazzaScreen() {
     try {
       setError(null);
       await checkStatus();
-      // Piazza posts come via search; load recent with empty-ish query
-      const results = await piazzaService.search('');
+      const results = await piazzaService.getPosts();
       setPosts(results as PiazzaPost[]);
     } catch (err: any) {
       setError(err.message || 'Failed to load Piazza posts');
