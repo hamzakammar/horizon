@@ -8,8 +8,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../../lib/supabase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen() {
   const [name, setName] = useState('');
@@ -17,6 +22,7 @@ export default function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { signUp } = useAuth();
   const navigation = useNavigation();
 
@@ -25,17 +31,13 @@ export default function SignUpScreen() {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
-
     setLoading(true);
     try {
       await signUp(email, password, name);
-      // No manual redirect needed!
-      // AuthProvider will update isAuthenticated and AppNavigator will switch stacks
     } catch (error: any) {
       Alert.alert('Sign Up Failed', error.message || 'An error occurred');
     } finally {
@@ -43,10 +45,78 @@ export default function SignUpScreen() {
     }
   };
 
+  const handleGoogleSignUp = async () => {
+    setGoogleLoading(true);
+    try {
+      const redirectUrl = AuthSession.makeRedirectUri({ scheme: 'horizon' });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (!data.url) throw new Error('No OAuth URL returned');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type === 'success' && result.url) {
+        const hash = result.url.split('#')[1] || '';
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token') ||
+          result.url.match(/access_token=([^&]+)/)?.[1];
+        const refreshToken = params.get('refresh_token') ||
+          result.url.match(/refresh_token=([^&]+)/)?.[1];
+
+        if (accessToken && refreshToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) throw sessionError;
+        } else {
+          throw new Error('Could not extract session from redirect URL');
+        }
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        // User cancelled — silent fail
+      }
+    } catch (error: any) {
+      Alert.alert('Google Sign Up Failed', error.message || 'An error occurred');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Create Account</Text>
       <Text style={styles.subtitle}>Sign up to get started</Text>
+
+      {/* Google Sign Up */}
+      <TouchableOpacity
+        style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
+        onPress={handleGoogleSignUp}
+        disabled={googleLoading || loading}
+      >
+        {googleLoading ? (
+          <ActivityIndicator color="#444" size="small" />
+        ) : (
+          <>
+            <View style={styles.googleIconContainer}>
+              <Text style={styles.googleIconText}>G</Text>
+            </View>
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* Divider */}
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or</Text>
+        <View style={styles.dividerLine} />
+      </View>
 
       <TextInput
         style={styles.input}
@@ -88,7 +158,7 @@ export default function SignUpScreen() {
       <TouchableOpacity
         style={[styles.button, loading && styles.buttonDisabled]}
         onPress={handleSignUp}
-        disabled={loading}
+        disabled={loading || googleLoading}
       >
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -124,8 +194,59 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#64748b',
-    marginBottom: 40,
+    marginBottom: 24,
     textAlign: 'center',
+    fontWeight: '500',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  googleIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#4285F4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  googleIconText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  googleButtonText: {
+    color: '#1e293b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e2e8f0',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#94a3b8',
+    fontSize: 14,
     fontWeight: '500',
   },
   input: {
