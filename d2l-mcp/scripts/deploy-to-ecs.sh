@@ -35,11 +35,18 @@ docker buildx build \
   --push \
   .
 
-# Step 5: Force new deployment
+# Step 5: Register updated task definition
+echo "📋 Registering task definition..."
+aws ecs register-task-definition \
+  --cli-input-json file://task-definition.json \
+  --region $REGION
+
+# Step 6: Force new deployment with latest task definition
 echo "🔄 Forcing new ECS deployment..."
 aws ecs update-service \
   --cluster $CLUSTER \
   --service $SERVICE \
+  --task-definition study-mcp-backend \
   --force-new-deployment \
   --region $REGION
 
