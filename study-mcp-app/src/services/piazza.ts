@@ -48,7 +48,7 @@ export class PiazzaService {
    */
   async connect(credentials: { email: string; password: string }): Promise<void> {
     try {
-      console.log('[Piazza] Attempting to connect...');
+      if (__DEV__) console.log('[Piazza] Attempting to connect...');
 
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
@@ -56,7 +56,7 @@ export class PiazzaService {
       }
 
       await apiClient.post('/piazza/connect', credentials);
-      console.log('[Piazza] Connection successful');
+      if (__DEV__) console.log('[Piazza] Connection successful');
     } catch (error: any) {
       console.error('[Piazza] Connection error:', error);
       throw error;
@@ -68,7 +68,7 @@ export class PiazzaService {
    */
   async connectWithCookies(payload: { cookies: string }): Promise<void> {
     try {
-      console.log('[Piazza] Storing cookies...');
+      if (__DEV__) console.log('[Piazza] Storing cookies...');
 
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
@@ -76,7 +76,7 @@ export class PiazzaService {
       }
 
       await apiClient.post('/piazza/connect-cookie', payload);
-      console.log('[Piazza] Cookies stored successfully');
+      if (__DEV__) console.log('[Piazza] Cookies stored successfully');
     } catch (error: any) {
       console.error('[Piazza] Cookie storage error:', error);
       throw error;

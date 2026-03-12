@@ -26,7 +26,7 @@ export default function PiazzaWebViewScreen() {
   useEffect(() => {
     (async () => {
       try {
-        console.log('[Piazza WebView] Clearing WebView cookies on mount');
+        if (__DEV__) console.log('[Piazza WebView] Clearing WebView cookies on mount');
         await CookieManager.clearAll(true);
       } catch (error) {
         console.warn('[Piazza WebView] Failed to clear cookies on mount:', error);
@@ -46,13 +46,13 @@ export default function PiazzaWebViewScreen() {
                            (url.includes('piazza.com') && !isLoginPage && url !== 'https://piazza.com/' && url !== 'https://www.piazza.com/');
 
     if (isAuthenticated && !isLoginPage) {
-      console.log('[Piazza WebView] Navigated to authenticated page:', url);
-      console.log('[Piazza WebView] Capturing cookies...');
+      if (__DEV__) console.log('[Piazza WebView] Navigated to authenticated page:', url);
+      if (__DEV__) console.log('[Piazza WebView] Capturing cookies...');
       
       try {
         // Get all cookies for piazza.com domain
         const cookies = await CookieManager.get('https://piazza.com', true);
-        console.log('[Piazza WebView] Retrieved cookies:', Object.keys(cookies));
+        if (__DEV__) console.log('[Piazza WebView] Retrieved cookies:', Object.keys(cookies));
         
         // Extract session_id (main Piazza cookie)
         const sessionId = cookies.session_id?.value;
@@ -63,7 +63,7 @@ export default function PiazzaWebViewScreen() {
             .map(([name, cookie]: [string, any]) => `${name}=${cookie.value}`)
             .join('; ');
           
-          console.log('[Piazza WebView] Session cookie found! Cookie string length:', cookieString.length);
+          if (__DEV__) console.log('[Piazza WebView] Session cookie found! Cookie string length:', cookieString.length);
           setCapturedCookies(cookieString);
           
           // Automatically connect and navigate back
@@ -71,7 +71,7 @@ export default function PiazzaWebViewScreen() {
             setTimeout(() => handleSubmit(cookieString), 500);
           }
         } else {
-          console.log('[Piazza WebView] Missing session_id cookie. Available cookies:', Object.keys(cookies));
+          if (__DEV__) console.log('[Piazza WebView] Missing session_id cookie. Available cookies:', Object.keys(cookies));
         }
       } catch (error: any) {
         console.error('[Piazza WebView] Error capturing cookies:', error);

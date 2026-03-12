@@ -8,7 +8,7 @@ export const useSync = () => {
     setSyncing(true);
     try {
       const { data } = await apiClient.post('/d2l/sync');
-      console.log('D2L sync complete:', data);
+      if (__DEV__) console.log('D2L sync complete:', data);
     } catch (error) {
       console.error('Unexpected error during D2L sync:', error);
     } finally {

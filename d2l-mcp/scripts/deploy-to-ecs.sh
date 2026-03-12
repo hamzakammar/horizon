@@ -21,19 +21,11 @@ aws ecr get-login-password --region $REGION | \
   docker login --username AWS --password-stdin $ECR_REPO
 
 # Step 3: Build and push Docker image for linux/amd64 (ECS Fargate requirement)
-echo "🐳 Building Docker image for linux/amd64..."
-# Create buildx builder if it doesn't exist, reuse if it does
-docker buildx inspect multiarch-builder &>/dev/null \
-  && docker buildx use multiarch-builder \
-  || docker buildx create --use --name multiarch-builder
+echo "🐳 Building Docker image..."
+docker build --platform linux/amd64 --tag $ECR_REPO:latest .
 
-# Build directly for linux/amd64 and push to ECR (more efficient)
-echo "📤 Building and pushing to ECR..."
-docker buildx build \
-  --platform linux/amd64 \
-  --tag $ECR_REPO:latest \
-  --push \
-  .
+echo "📤 Pushing to ECR..."
+docker push $ECR_REPO:latest
 
 # Step 5: Register updated task definition
 echo "📋 Registering task definition..."

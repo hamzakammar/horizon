@@ -27,12 +27,12 @@ export default function D2LWebViewScreen({ route }: any) {
   const handleNavigationStateChange = async (navState: any) => {
     // Check if we've navigated to the D2L home page (successful login)
     if (navState.url.includes('/d2l/home')) {
-      console.log('[D2L WebView] Navigated to /d2l/home, capturing cookies...');
+      if (__DEV__) console.log('[D2L WebView] Navigated to /d2l/home, capturing cookies...');
 
       try {
         // Get all cookies for the current URL
         const cookies = await CookieManager.get(navState.url, true);
-        console.log('[D2L WebView] Retrieved cookies:', Object.keys(cookies));
+        if (__DEV__) console.log('[D2L WebView] Retrieved cookies:', Object.keys(cookies));
 
         // Extract the two required cookies
         const d2lSessionVal = cookies.d2lSessionVal?.value;
@@ -41,7 +41,7 @@ export default function D2LWebViewScreen({ route }: any) {
         if (d2lSessionVal && d2lSecureSessionVal) {
           // Format cookies as a cookie string
           const cookieString = `d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`;
-          console.log('[D2L WebView] Both required cookies found!');
+          if (__DEV__) console.log('[D2L WebView] Both required cookies found!');
           setCapturedCookies(cookieString);
 
           // Automatically connect and navigate back
@@ -49,7 +49,7 @@ export default function D2LWebViewScreen({ route }: any) {
             setTimeout(() => handleSubmit(cookieString), 500);
           }
         } else {
-          console.log('[D2L WebView] Missing required cookies. Found:', {
+          if (__DEV__) console.log('[D2L WebView] Missing required cookies. Found:', {
             d2lSessionVal: !!d2lSessionVal,
             d2lSecureSessionVal: !!d2lSecureSessionVal,
           });
@@ -76,7 +76,7 @@ export default function D2LWebViewScreen({ route }: any) {
       // Trigger sync via ECS backend
       const { data } = await apiClient.post('/d2l/sync', { action: 'sync_d2l', host, cookies: cookiesToUse });
 
-      console.log('[D2L WebView] Sync response:', data);
+      if (__DEV__) console.log('[D2L WebView] Sync response:', data);
 
       // Automatically navigate back to dashboard on success
       navigation.goBack();
@@ -109,11 +109,11 @@ export default function D2LWebViewScreen({ route }: any) {
         style={styles.webview}
         onLoadStart={() => {
           setLoading(true);
-          console.log('[D2L WebView] Load started');
+          if (__DEV__) console.log('[D2L WebView] Load started');
         }}
         onLoadEnd={() => {
           setLoading(false);
-          console.log('[D2L WebView] Load ended');
+          if (__DEV__) console.log('[D2L WebView] Load ended');
         }}
         onNavigationStateChange={handleNavigationStateChange}
         javaScriptEnabled={true}

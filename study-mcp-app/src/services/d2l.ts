@@ -46,7 +46,7 @@ export class D2LService {
    */
   async connectWithToken(credentials: { host: string; token: string }): Promise<void> {
     try {
-      console.log('[D2L] Storing token...');
+      if (__DEV__) console.log('[D2L] Storing token...');
 
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
@@ -54,7 +54,7 @@ export class D2LService {
       }
 
       await apiClient.post('/d2l/token', credentials);
-      console.log('[D2L] Token stored successfully');
+      if (__DEV__) console.log('[D2L] Token stored successfully');
     } catch (error: any) {
       console.error('[D2L] Token storage error:', error);
       if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {
@@ -76,7 +76,7 @@ export class D2LService {
    */
   async connectWithCookies(payload: { host: string; cookies: string }): Promise<void> {
     try {
-      console.log('[D2L] Storing cookies...');
+      if (__DEV__) console.log('[D2L] Storing cookies...');
 
       const isHealthy = await this.checkBackendHealth();
       if (!isHealthy) {
@@ -84,7 +84,7 @@ export class D2LService {
       }
 
       await apiClient.post('/d2l/connect-cookie', payload);
-      console.log('[D2L] Cookies stored successfully');
+      if (__DEV__) console.log('[D2L] Cookies stored successfully');
     } catch (error: any) {
       console.error('[D2L] Cookie storage error:', error);
       if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {
@@ -106,7 +106,7 @@ export class D2LService {
    */
   async connect(credentials: { host: string; username: string; password: string }): Promise<void> {
     try {
-      console.log('[D2L] Attempting to connect...');
+      if (__DEV__) console.log('[D2L] Attempting to connect...');
 
       // Check if backend is reachable first
       const isHealthy = await this.checkBackendHealth();
@@ -119,7 +119,7 @@ export class D2LService {
       await apiClient.post('/d2l/connect', credentials, {
         timeout: 90000, // 90 seconds
       });
-      console.log('[D2L] Connection successful');
+      if (__DEV__) console.log('[D2L] Connection successful');
     } catch (error: any) {
       console.error('[D2L] Connection error:', error);
       if (error.code === 'ECONNREFUSED' || error.message?.includes('Cannot reach backend')) {

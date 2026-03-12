@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.hamzaammar.horizon",
+      "bundleIdentifier": "ca.hamzaammar.horizon",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Horizon uses your photo library to attach images to notes.",
         "NSCameraUsageDescription": "Horizon uses your camera to capture documents for notes.",

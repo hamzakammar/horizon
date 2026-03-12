@@ -19,7 +19,7 @@ const UploadNote = () => {
       if (error) {
         console.error('Error uploading file:', error);
       } else {
-        console.log('File uploaded successfully:', data);
+        if (__DEV__) console.log('File uploaded successfully:', data);
       }
     } catch (error) {
       console.error('Unexpected error during file upload:', error);

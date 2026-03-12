@@ -419,26 +419,6 @@ async function main() {
     // Health check (no auth) for ALB / load balancers
     app.get("/health", (_req, res) => res.json({ ok: true }));
 
-    // Debug: check which env vars are loaded (no secrets exposed)
-    app.get("/debug/env", (_req, res) => res.json({
-      hasCognitoPoolId: !!process.env.COGNITO_USER_POOL_ID,
-      hasCognitoClientId: !!process.env.COGNITO_CLIENT_ID,
-      hasSupabaseJwtSecret: !!process.env.SUPABASE_JWT_SECRET,
-      supabaseJwtSecretLength: process.env.SUPABASE_JWT_SECRET?.length ?? 0,
-    }));
-
-    // Debug: decode JWT header/payload without verifying (to inspect alg + claims)
-    app.post("/debug/jwt", (req, res) => {
-      const auth = req.headers["authorization"] as string;
-      const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-      if (!token) { res.status(400).json({ error: "No token" }); return; }
-      const parts = token.split(".");
-      if (parts.length !== 3) { res.status(400).json({ error: "Invalid JWT" }); return; }
-      const header = JSON.parse(Buffer.from(parts[0], "base64url").toString());
-      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
-      res.json({ header, payload: { ...payload, sub: payload.sub ? "***" : undefined } });
-    });
-
     // REST API (app-first): /api/notes, /api/search, /api/dashboard
     app.use("/api", authMiddleware, apiRoutes);
 

@@ -66,7 +66,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
         deviceToken: token,
         platform,
       });
-      console.log('[PUSH] Device token registered successfully');
+      if (__DEV__) console.log('[PUSH] Device token registered successfully');
     } catch (error) {
       console.error('[PUSH] Failed to register token with backend:', error);
       // Don't fail if backend registration fails - token is still valid
@@ -88,7 +88,7 @@ export function setupNotificationListeners(
 ) {
   // Listener for notifications received while app is foregrounded
   const receivedListener = Notifications.addNotificationReceivedListener((notification) => {
-    console.log('[PUSH] Notification received:', notification);
+    if (__DEV__) console.log('[PUSH] Notification received:', notification);
     if (onNotificationReceived) {
       onNotificationReceived(notification);
     }
@@ -96,7 +96,7 @@ export function setupNotificationListeners(
 
   // Listener for when user taps on a notification
   const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-    console.log('[PUSH] Notification tapped:', response);
+    if (__DEV__) console.log('[PUSH] Notification tapped:', response);
     if (onNotificationTapped) {
       onNotificationTapped(response);
     }
