@@ -5,6 +5,7 @@ const BASE_URL = 'https://api.hamzaammar.ca/api';
 async function getAuthHeader(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Not authenticated');
+  console.log('TOKEN HEADER:', session.access_token.substring(0, 80));
   return `Bearer ${session.access_token}`;
 }
 
