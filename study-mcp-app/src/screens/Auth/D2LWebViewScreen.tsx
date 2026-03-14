@@ -13,28 +13,36 @@ import { AntDesign } from '@expo/vector-icons';
 import CookieManager from '@react-native-cookies/cookies';
 import { apiClient } from '../../config/api';
 
-const D2L_API_VERSION = '1.57';
+// Injected into WebView to read document.cookie and post it back
+// Much more reliable than CookieManager.get() which doesn't see WKWebView cookies
+const COOKIE_READ_SCRIPT = `
+(function() {
+  window.ReactNativeWebView.postMessage(JSON.stringify({ 
+    type: 'cookies', 
+    cookies: document.cookie 
+  }));
+})();
+true;
+`;
 
-async function d2lFetch(host: string, path: string, cookieString: string): Promise<any> {
-  const url = `https://${host}${path}`;
-  // Use XMLHttpRequest instead of fetch — behaves differently with cookie headers in RN
+function d2lFetch(host: string, path: string, cookieString: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
+    xhr.open('GET', `https://${host}${path}`, true);
     xhr.setRequestHeader('Cookie', cookieString);
     xhr.setRequestHeader('Accept', 'application/json');
     xhr.withCredentials = true;
+    xhr.timeout = 15000;
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText)); }
-        catch(e) { reject(new Error('Invalid JSON response')); }
+        catch { reject(new Error('Invalid JSON response')); }
       } else {
         reject(new Error(`D2L API error ${xhr.status} on ${path}`));
       }
     };
     xhr.onerror = () => reject(new Error(`Network error on ${path}`));
     xhr.ontimeout = () => reject(new Error(`Timeout on ${path}`));
-    xhr.timeout = 15000;
     xhr.send();
   });
 }
@@ -49,33 +57,68 @@ export default function D2LWebViewScreen({ route }: any) {
   const [statusText, setStatusText] = useState('Please log in to D2L');
   const triggeredRef = useRef(false);
 
-  const d2lUrl = `https://${host}/d2l/home`;
+  const injectCookieRead = () => {
+    webViewRef.current?.injectJavaScript(COOKIE_READ_SCRIPT);
+  };
 
-  const handleConnect = async () => {
+  const handleNavigationStateChange = (navState: any) => {
+    if (__DEV__) console.log('[D2L WebView] Nav:', navState.url, 'loading:', navState.loading);
+    if (navState.url.includes('/d2l/home') && !navState.loading && !loggedIn) {
+      setLoggedIn(true);
+      setStatusText('Logged in! Reading session...');
+      setTimeout(injectCookieRead, 600);
+    }
+  };
+
+  const handleMessage = async (event: any) => {
+    try {
+      const msg = JSON.parse(event.nativeEvent.data);
+      if (msg.type !== 'cookies') return;
+
+      const raw: string = msg.cookies || '';
+      const extract = (name: string) => {
+        const m = raw.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+        return m ? m[1] : null;
+      };
+
+      const d2lSessionVal = extract('d2lSessionVal');
+      const d2lSecureSessionVal = extract('d2lSecureSessionVal');
+
+      if (__DEV__) console.log('[D2L] Cookies from page:', {
+        d2lSessionVal: !!d2lSessionVal,
+        d2lSecureSessionVal: !!d2lSecureSessionVal,
+        raw: raw.substring(0, 100),
+      });
+
+      if (!d2lSessionVal || !d2lSecureSessionVal) {
+        // Fallback: try CookieManager
+        if (__DEV__) console.log('[D2L] Trying CookieManager fallback...');
+        const cookies = await CookieManager.get(`https://${host}`, true);
+        const sv = cookies.d2lSessionVal?.value;
+        const ssv = cookies.d2lSecureSessionVal?.value;
+        if (!sv || !ssv) {
+          Alert.alert('Login Required', 'Could not read session cookies. Please log in to D2L fully and tap Connect again.');
+          return;
+        }
+        await doSync(`d2lSessionVal=${sv}; d2lSecureSessionVal=${ssv}`);
+        return;
+      }
+
+      await doSync(`d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`);
+    } catch (e: any) {
+      console.error('[D2L WebView] handleMessage error:', e);
+    }
+  };
+
+  const doSync = async (cookieString: string) => {
     if (triggeredRef.current) return;
     triggeredRef.current = true;
     setSubmitting(true);
 
     try {
-      // Step 1: Read cookies from WebView (they're now in the shared iOS cookie store)
-      setStatusText('Reading session cookies...');
-      const cookies = await CookieManager.get(`https://${host}`, true);
-      const d2lSessionVal = cookies.d2lSessionVal?.value;
-      const d2lSecureSessionVal = cookies.d2lSecureSessionVal?.value;
-
-      if (!d2lSessionVal || !d2lSecureSessionVal) {
-        throw new Error('Session cookies not found. Try logging in again.');
-      }
-
-      const cookieString = `d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`;
-      if (__DEV__) console.log('[D2L] Cookies captured, fetching courses...');
-
-      // Step 2: Fetch enrollments using cookies (native XHR, same cookie store as WebView)
       setStatusText('Fetching your courses...');
       const enrollmentsResponse = await d2lFetch(
-        host,
-        `/d2l/api/lp/1.43/enrollments/myenrollments/`,
-        cookieString
+        host, '/d2l/api/lp/1.43/enrollments/myenrollments/', cookieString
       );
 
       const activeCourses = (enrollmentsResponse.Items || []).filter(
@@ -85,57 +128,45 @@ export default function D2LWebViewScreen({ route }: any) {
           e.Access?.CanAccess
       );
 
-      if (__DEV__) console.log(`[D2L] Found ${activeCourses.length} active courses`);
+      if (__DEV__) console.log(`[D2L] ${activeCourses.length} active courses`);
       setStatusText(`Syncing ${activeCourses.length} courses...`);
 
-      // Step 3: Fetch assignments for each course
       const courseData: Array<{ orgUnitId: number; name: string; assignments: any[] }> = [];
       for (const enrollment of activeCourses) {
         const orgUnitId = enrollment.OrgUnit.Id;
         const courseName = enrollment.OrgUnit.Name;
         try {
           const folders = await d2lFetch(
-            host,
-            `/d2l/api/le/${D2L_API_VERSION}/${orgUnitId}/dropbox/folders/`,
-            cookieString
+            host, `/d2l/api/le/1.57/${orgUnitId}/dropbox/folders/`, cookieString
           );
-          const assignments = Array.isArray(folders) ? folders : (folders.Objects || []);
-          courseData.push({ orgUnitId, name: courseName, assignments });
-          if (__DEV__) console.log(`[D2L] ${courseName}: ${assignments.length} assignments`);
-        } catch (e) {
-          if (__DEV__) console.warn(`[D2L] Failed assignments for ${courseName}:`, e);
+          courseData.push({
+            orgUnitId,
+            name: courseName,
+            assignments: Array.isArray(folders) ? folders : (folders.Objects || []),
+          });
+        } catch {
           courseData.push({ orgUnitId, name: courseName, assignments: [] });
         }
       }
 
-      // Step 4: Send to backend
       setStatusText('Saving to your account...');
-      await apiClient.post('/d2l/connect-and-sync', {
-        host,
-        cookies: cookieString,
-        courseData,
-      });
+      await apiClient.post('/d2l/connect-and-sync', { host, cookies: cookieString, courseData });
 
-      if (__DEV__) console.log('[D2L] Connect and sync complete');
+      if (__DEV__) console.log('[D2L] Done');
       navigation.goBack();
-
     } catch (error: any) {
-      console.error('[D2L] Connect error:', error);
+      console.error('[D2L] Sync error:', error);
       Alert.alert('Error', error.message || 'Failed to connect to D2L');
       setSubmitting(false);
       triggeredRef.current = false;
-      setStatusText('Tap "Connect" to try again');
+      setStatusText('Tap Connect to try again');
     }
   };
 
-  const handleNavigationStateChange = (navState: any) => {
-    if (__DEV__) console.log('[D2L WebView] Nav:', navState.url, 'loading:', navState.loading);
-    if (navState.url.includes('/d2l/home') && !navState.loading && !loggedIn) {
-      setLoggedIn(true);
-      setStatusText('Logged in! Tap Connect to sync.');
-      // Auto-trigger after short delay
-      setTimeout(handleConnect, 800);
-    }
+  const handleManualConnect = () => {
+    triggeredRef.current = false;
+    setStatusText('Reading session...');
+    injectCookieRead();
   };
 
   return (
@@ -157,11 +188,12 @@ export default function D2LWebViewScreen({ route }: any) {
 
       <WebView
         ref={webViewRef}
-        source={{ uri: d2lUrl }}
+        source={{ uri: `https://${host}/d2l/home` }}
         style={styles.webview}
         onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
         onNavigationStateChange={handleNavigationStateChange}
+        onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         sharedCookiesEnabled={true}
@@ -180,7 +212,7 @@ export default function D2LWebViewScreen({ route }: any) {
         </View>
 
         {loggedIn && !submitting && (
-          <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
+          <TouchableOpacity style={styles.connectButton} onPress={handleManualConnect}>
             <AntDesign name="link" size={18} color="#fff" style={{ marginRight: 8 }} />
             <Text style={styles.connectButtonText}>Connect</Text>
           </TouchableOpacity>
