@@ -15,65 +15,29 @@ import { apiClient } from '../../config/api';
 
 const D2L_API_VERSION = '1.57';
 
-const buildFetchScript = (host: string) => `
-(async function() {
-  try {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'status', message: 'Fetching courses...' }));
-
-    const enrollRes = await fetch('https://${host}/d2l/api/lp/1.43/enrollments/myenrollments/', {
-      credentials: 'include',
-      headers: { 'Accept': 'application/json' }
-    });
-
-    if (!enrollRes.ok) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({ 
-        type: 'error', 
-        message: 'Enrollments API returned ' + enrollRes.status + '. Try logging out and back in to D2L.'
-      }));
-      return;
-    }
-
-    const enrollData = await enrollRes.json();
-    const activeCourses = (enrollData.Items || []).filter(e =>
-      e.OrgUnit && e.OrgUnit.Type && e.OrgUnit.Type.Code === 'Course Offering' &&
-      e.Access && e.Access.IsActive && e.Access.CanAccess
-    );
-
-    window.ReactNativeWebView.postMessage(JSON.stringify({ 
-      type: 'status', 
-      message: 'Syncing ' + activeCourses.length + ' courses...' 
-    }));
-
-    const courseData = [];
-    for (const enrollment of activeCourses) {
-      const orgUnitId = enrollment.OrgUnit.Id;
-      const courseName = enrollment.OrgUnit.Name;
-      try {
-        const foldersRes = await fetch(
-          'https://${host}/d2l/api/le/${D2L_API_VERSION}/' + orgUnitId + '/dropbox/folders/',
-          { credentials: 'include', headers: { 'Accept': 'application/json' } }
-        );
-        let assignments = [];
-        if (foldersRes.ok) {
-          const data = await foldersRes.json();
-          assignments = Array.isArray(data) ? data : (data.Objects || []);
-        }
-        courseData.push({ orgUnitId, name: courseName, assignments });
-      } catch(e) {
-        courseData.push({ orgUnitId, name: courseName, assignments: [] });
+async function d2lFetch(host: string, path: string, cookieString: string): Promise<any> {
+  const url = `https://${host}${path}`;
+  // Use XMLHttpRequest instead of fetch — behaves differently with cookie headers in RN
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.setRequestHeader('Cookie', cookieString);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.withCredentials = true;
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch(e) { reject(new Error('Invalid JSON response')); }
+      } else {
+        reject(new Error(`D2L API error ${xhr.status} on ${path}`));
       }
-    }
-
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'courseData', courseData }));
-  } catch(e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ 
-      type: 'error', 
-      message: 'Script error: ' + (e && e.message ? e.message : String(e))
-    }));
-  }
-})();
-true;
-`;
+    };
+    xhr.onerror = () => reject(new Error(`Network error on ${path}`));
+    xhr.ontimeout = () => reject(new Error(`Timeout on ${path}`));
+    xhr.timeout = 15000;
+    xhr.send();
+  });
+}
 
 export default function D2LWebViewScreen({ route }: any) {
   const { host } = route.params;
@@ -83,85 +47,95 @@ export default function D2LWebViewScreen({ route }: any) {
   const [loggedIn, setLoggedIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusText, setStatusText] = useState('Please log in to D2L');
-  const [canManualConnect, setCanManualConnect] = useState(false);
-  const injectedRef = useRef(false);
+  const triggeredRef = useRef(false);
 
   const d2lUrl = `https://${host}/d2l/home`;
 
-  const injectFetchScript = () => {
-    if (injectedRef.current) return;
-    injectedRef.current = true;
-    if (__DEV__) console.log('[D2L WebView] Injecting fetch script...');
-    webViewRef.current?.injectJavaScript(buildFetchScript(host));
+  const handleConnect = async () => {
+    if (triggeredRef.current) return;
+    triggeredRef.current = true;
+    setSubmitting(true);
+
+    try {
+      // Step 1: Read cookies from WebView (they're now in the shared iOS cookie store)
+      setStatusText('Reading session cookies...');
+      const cookies = await CookieManager.get(`https://${host}`, true);
+      const d2lSessionVal = cookies.d2lSessionVal?.value;
+      const d2lSecureSessionVal = cookies.d2lSecureSessionVal?.value;
+
+      if (!d2lSessionVal || !d2lSecureSessionVal) {
+        throw new Error('Session cookies not found. Try logging in again.');
+      }
+
+      const cookieString = `d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`;
+      if (__DEV__) console.log('[D2L] Cookies captured, fetching courses...');
+
+      // Step 2: Fetch enrollments using cookies (native XHR, same cookie store as WebView)
+      setStatusText('Fetching your courses...');
+      const enrollmentsResponse = await d2lFetch(
+        host,
+        `/d2l/api/lp/1.43/enrollments/myenrollments/`,
+        cookieString
+      );
+
+      const activeCourses = (enrollmentsResponse.Items || []).filter(
+        (e: any) =>
+          e.OrgUnit?.Type?.Code === 'Course Offering' &&
+          e.Access?.IsActive &&
+          e.Access?.CanAccess
+      );
+
+      if (__DEV__) console.log(`[D2L] Found ${activeCourses.length} active courses`);
+      setStatusText(`Syncing ${activeCourses.length} courses...`);
+
+      // Step 3: Fetch assignments for each course
+      const courseData: Array<{ orgUnitId: number; name: string; assignments: any[] }> = [];
+      for (const enrollment of activeCourses) {
+        const orgUnitId = enrollment.OrgUnit.Id;
+        const courseName = enrollment.OrgUnit.Name;
+        try {
+          const folders = await d2lFetch(
+            host,
+            `/d2l/api/le/${D2L_API_VERSION}/${orgUnitId}/dropbox/folders/`,
+            cookieString
+          );
+          const assignments = Array.isArray(folders) ? folders : (folders.Objects || []);
+          courseData.push({ orgUnitId, name: courseName, assignments });
+          if (__DEV__) console.log(`[D2L] ${courseName}: ${assignments.length} assignments`);
+        } catch (e) {
+          if (__DEV__) console.warn(`[D2L] Failed assignments for ${courseName}:`, e);
+          courseData.push({ orgUnitId, name: courseName, assignments: [] });
+        }
+      }
+
+      // Step 4: Send to backend
+      setStatusText('Saving to your account...');
+      await apiClient.post('/d2l/connect-and-sync', {
+        host,
+        cookies: cookieString,
+        courseData,
+      });
+
+      if (__DEV__) console.log('[D2L] Connect and sync complete');
+      navigation.goBack();
+
+    } catch (error: any) {
+      console.error('[D2L] Connect error:', error);
+      Alert.alert('Error', error.message || 'Failed to connect to D2L');
+      setSubmitting(false);
+      triggeredRef.current = false;
+      setStatusText('Tap "Connect" to try again');
+    }
   };
 
   const handleNavigationStateChange = (navState: any) => {
     if (__DEV__) console.log('[D2L WebView] Nav:', navState.url, 'loading:', navState.loading);
-    // Only trigger when fully loaded at /d2l/home
-    if (navState.url.includes('/d2l/home') && !navState.loading && !loggedIn && !submitting) {
+    if (navState.url.includes('/d2l/home') && !navState.loading && !loggedIn) {
       setLoggedIn(true);
-      setCanManualConnect(true);
-      setStatusText('Logged in — fetching your courses...');
-      setTimeout(injectFetchScript, 1500);
+      setStatusText('Logged in! Tap Connect to sync.');
+      // Auto-trigger after short delay
+      setTimeout(handleConnect, 800);
     }
-  };
-
-  const handleMessage = async (event: any) => {
-    try {
-      const msg = JSON.parse(event.nativeEvent.data);
-      if (__DEV__) console.log('[D2L WebView] Message:', msg.type, msg.message || '');
-
-      if (msg.type === 'status') {
-        setStatusText(msg.message);
-        return;
-      }
-
-      if (msg.type === 'error') {
-        console.error('[D2L WebView] Script error:', msg.message);
-        Alert.alert('D2L Error', msg.message);
-        setSubmitting(false);
-        injectedRef.current = false;
-        setStatusText('Tap "Connect" to try again');
-        return;
-      }
-
-      if (msg.type === 'courseData') {
-        const { courseData } = msg;
-        if (__DEV__) console.log(`[D2L WebView] Got data for ${courseData.length} courses`);
-
-        setSubmitting(true);
-        setStatusText('Saving to your account...');
-
-        // Get cookies for future re-syncs
-        const cookies = await CookieManager.get(`https://${host}`, true);
-        const d2lSessionVal = cookies.d2lSessionVal?.value;
-        const d2lSecureSessionVal = cookies.d2lSecureSessionVal?.value;
-        const cookieString = d2lSessionVal && d2lSecureSessionVal
-          ? `d2lSessionVal=${d2lSessionVal}; d2lSecureSessionVal=${d2lSecureSessionVal}`
-          : '';
-
-        if (__DEV__) console.log('[D2L WebView] Cookies captured:', !!cookieString);
-
-        await apiClient.post('/d2l/connect-and-sync', {
-          host,
-          cookies: cookieString,
-          courseData,
-        });
-
-        if (__DEV__) console.log('[D2L WebView] Connect and sync complete');
-        navigation.goBack();
-      }
-    } catch (e: any) {
-      console.error('[D2L WebView] handleMessage error:', e);
-      Alert.alert('Error', e?.message || 'Something went wrong');
-      setSubmitting(false);
-    }
-  };
-
-  const handleManualConnect = () => {
-    injectedRef.current = false;
-    setStatusText('Fetching courses...');
-    injectFetchScript();
   };
 
   return (
@@ -188,7 +162,6 @@ export default function D2LWebViewScreen({ route }: any) {
         onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
         onNavigationStateChange={handleNavigationStateChange}
-        onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         sharedCookiesEnabled={true}
@@ -198,17 +171,16 @@ export default function D2LWebViewScreen({ route }: any) {
 
       <View style={styles.footer}>
         <View style={styles.tokenStatus}>
-          {loggedIn ? (
-            <AntDesign name="checkcircle" size={20} color="#10b981" />
-          ) : (
-            <AntDesign name="info" size={20} color="#6366f1" />
-          )}
+          {loggedIn
+            ? <AntDesign name="checkcircle" size={20} color="#10b981" />
+            : <AntDesign name="info" size={20} color="#6366f1" />
+          }
           <Text style={styles.tokenStatusText}>{statusText}</Text>
           {submitting && <ActivityIndicator size="small" color="#6366f1" style={{ marginLeft: 8 }} />}
         </View>
 
-        {canManualConnect && !submitting && (
-          <TouchableOpacity style={styles.connectButton} onPress={handleManualConnect}>
+        {loggedIn && !submitting && (
+          <TouchableOpacity style={styles.connectButton} onPress={handleConnect}>
             <AntDesign name="link" size={18} color="#fff" style={{ marginRight: 8 }} />
             <Text style={styles.connectButtonText}>Connect</Text>
           </TouchableOpacity>
