@@ -520,32 +520,37 @@ router.post("/d2l/connect-and-sync", async (req: Request, res: Response) => {
 
           const sourceRef = `${orgUnitId}-${a.Id}`;
 
-          const { data: existing } = await supabase
-            .from("tasks")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("source_ref", sourceRef)
-            .maybeSingle();
-
-          if (!existing) {
-            const { error: insertError } = await supabase
+          try {
+            const { data: existing } = await supabase
               .from("tasks")
-              .insert({
-                user_id: userId,
-                title: a.Name,
-                course_id: String(orgUnitId),
-                source: `d2l-${orgUnitId}`,
-                source_ref: sourceRef,
-                due_at: dueDate,
-                status: "open",
-              });
+              .select("id")
+              .eq("user_id", userId)
+              .eq("source_ref", sourceRef)
+              .maybeSingle();
 
-            if (!insertError) {
-              addedCount++;
-              totalAdded++;
-            } else {
-              console.error(`[API] [${correlationId}] Insert error for ${a.Name}:`, insertError);
+            if (!existing) {
+              const { error: insertError } = await supabase
+                .from("tasks")
+                .insert({
+                  user_id: userId,
+                  title: a.Name,
+                  course_id: String(orgUnitId),
+                  source: `d2l-${orgUnitId}`,
+                  source_ref: sourceRef,
+                  due_at: dueDate,
+                  status: "open",
+                });
+
+              if (!insertError) {
+                addedCount++;
+                totalAdded++;
+              } else {
+                console.error(`[API] [${correlationId}] Insert error for ${a.Name}:`, insertError);
+              }
             }
+          } catch (taskErr: any) {
+            console.error(`[API] [${correlationId}] tasks table error (may not exist yet):`, taskErr.message);
+            break; // Stop trying if the table doesn't exist
           }
         }
 
@@ -1004,27 +1009,30 @@ router.get("/d2l/courses", async (req: Request, res: Response) => {
 
     // Derive distinct courses from the tasks table (stored during connect-and-sync)
     // This avoids server-side D2L API calls which fail due to IP/session mismatch
-    const { data: tasks, error: tasksError } = await supabase
-      .from("tasks")
-      .select("course_id, source")
-      .eq("user_id", userId)
-      .like("source", "d2l-%")
-      .not("course_id", "is", null);
-
-    if (tasksError) throw tasksError;
-
-    // Build unique courses from tasks
     const courseMap = new Map<string, { id: string; name: string; code: string; orgUnitId: number }>();
-    for (const task of (tasks || [])) {
-      const orgUnitId = task.course_id;
-      if (!courseMap.has(orgUnitId)) {
-        courseMap.set(orgUnitId, {
-          id: orgUnitId,
-          name: `Course ${orgUnitId}`,
-          code: "",
-          orgUnitId: Number(orgUnitId),
-        });
+    try {
+      const { data: tasks, error: tasksError } = await supabase
+        .from("tasks")
+        .select("course_id, source")
+        .eq("user_id", userId)
+        .like("source", "d2l-%")
+        .not("course_id", "is", null);
+
+      if (!tasksError) {
+        for (const task of (tasks || [])) {
+          const orgUnitId = task.course_id;
+          if (!courseMap.has(orgUnitId)) {
+            courseMap.set(orgUnitId, {
+              id: orgUnitId,
+              name: `Course ${orgUnitId}`,
+              code: "",
+              orgUnitId: Number(orgUnitId),
+            });
+          }
+        }
       }
+    } catch {
+      // tasks table may not exist yet — that's fine, live fetch is the primary path
     }
 
     // Also try live D2L fetch — if it fails, fall back to tasks-derived courses
