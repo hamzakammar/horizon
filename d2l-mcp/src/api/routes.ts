@@ -593,15 +593,13 @@ router.post("/d2l/connect-cookie", async (req: Request, res: Response) => {
 
   try {
     // Store cookies in user_credentials table as the 'token'
-    // We'll use a dummy email since we're using cookies
+    // Store cookies as token (cookie-based auth)
     const { error } = await supabase
       .from("user_credentials")
       .upsert({
         user_id: userId,
         service: "d2l",
-        email: `cookie-auth-${userId}@piazza.local`, // Dummy email for cookie-based auth
-        password: cookies, // Store cookies as password (legacy field, but we use token now)
-        token: cookies, // Store cookies as the token string
+        token: cookies,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: "user_id,service"
@@ -1380,15 +1378,13 @@ router.post("/piazza/connect-cookie", async (req: Request, res: Response) => {
     }
 
     // Store cookies in user_credentials table as the 'token'
-    // We'll use a dummy email since we're using cookies
+    // Store cookies as token (cookie-based auth)
     const { error } = await supabase
       .from("user_credentials")
       .upsert({
         user_id: userId,
         service: "piazza",
-        email: `cookie-auth-${userId}@piazza.local`, // Dummy email for cookie-based auth
-        password: cookies, // Store cookies as password (legacy field, but we use token now)
-        token: cookies, // Store cookies as the token string
+        token: cookies,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: "user_id,service"
