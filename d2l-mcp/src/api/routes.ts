@@ -497,9 +497,11 @@ router.post("/d2l/connect-and-sync", async (req: Request, res: Response) => {
       return;
     }
 
-    // Clear cached token so next request picks up fresh cookies
+    // Clear both caches so next request picks up fresh cookies from DB
     const { clearTokenCache } = await import("../auth.js");
+    const { clearSessionCache } = await import("../auth-valence.js");
     clearTokenCache(userId);
+    clearSessionCache(userId);
 
     // 2. Ingest pre-fetched assignment data (app fetched this on-device)
     let totalAdded = 0;
@@ -986,7 +988,7 @@ router.post("/d2l/sync", async (req: Request, res: Response) => {
 router.get("/d2l/courses", async (req: Request, res: Response) => {
   const userId = req.userId!;
   try {
-    // Get user's D2L host from credentials
+    // Check credentials exist first
     const { data: credsData } = await supabase
       .from("user_credentials")
       .select("host")
@@ -1000,28 +1002,59 @@ router.get("/d2l/courses", async (req: Request, res: Response) => {
       return;
     }
 
-    const client = new D2LClient(userId, creds.host);
-    const enrollments = await client.getMyEnrollments() as { Items: any[] };
+    // Derive distinct courses from the tasks table (stored during connect-and-sync)
+    // This avoids server-side D2L API calls which fail due to IP/session mismatch
+    const { data: tasks, error: tasksError } = await supabase
+      .from("tasks")
+      .select("course_id, source")
+      .eq("user_id", userId)
+      .like("source", "d2l-%")
+      .not("course_id", "is", null);
 
-    const courses = enrollments.Items
-      .filter((e: any) =>
-        e.OrgUnit?.Type?.Code === "Course Offering" &&
-        e.Access?.IsActive &&
-        e.Access?.CanAccess
-      )
-      .map((e: any) => ({
-        id: String(e.OrgUnit.Id),
-        name: e.OrgUnit.Name,
-        code: e.OrgUnit.Code || "",
-        orgUnitId: e.OrgUnit.Id,
-        startDate: e.Access?.StartDate || null,
-        endDate: e.Access?.EndDate || null,
-      }));
+    if (tasksError) throw tasksError;
 
-    res.json({ courses });
+    // Build unique courses from tasks
+    const courseMap = new Map<string, { id: string; name: string; code: string; orgUnitId: number }>();
+    for (const task of (tasks || [])) {
+      const orgUnitId = task.course_id;
+      if (!courseMap.has(orgUnitId)) {
+        courseMap.set(orgUnitId, {
+          id: orgUnitId,
+          name: `Course ${orgUnitId}`,
+          code: "",
+          orgUnitId: Number(orgUnitId),
+        });
+      }
+    }
+
+    // Also try live D2L fetch — if it fails, fall back to tasks-derived courses
+    try {
+      const client = new D2LClient(userId, creds.host);
+      const enrollments = await client.getMyEnrollments() as { Items: any[] };
+      const liveCourses = enrollments.Items
+        .filter((e: any) =>
+          e.OrgUnit?.Type?.Code === "Course Offering" &&
+          e.Access?.IsActive &&
+          e.Access?.CanAccess
+        )
+        .map((e: any) => ({
+          id: String(e.OrgUnit.Id),
+          name: e.OrgUnit.Name,
+          code: e.OrgUnit.Code || "",
+          orgUnitId: e.OrgUnit.Id,
+          startDate: e.Access?.StartDate || null,
+          endDate: e.Access?.EndDate || null,
+        }));
+      res.json({ courses: liveCourses, source: "live" });
+      return;
+    } catch (liveErr: any) {
+      console.error("[API] d2l/courses live fetch failed, falling back to cached:", liveErr.message);
+    }
+
+    // Fallback: return courses derived from synced tasks
+    res.json({ courses: Array.from(courseMap.values()), source: "cached" });
   } catch (e: any) {
     console.error("[API] d2l/courses error:", e);
-    // Check if error is REAUTH_REQUIRED
     if (e.message === "REAUTH_REQUIRED" || (e instanceof Error && e.message.includes("REAUTH_REQUIRED"))) {
       res.status(401).json({ 
         error: "REAUTH_REQUIRED",
