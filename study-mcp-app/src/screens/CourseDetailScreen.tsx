@@ -455,12 +455,41 @@ export default function CourseDetailScreen() {
                   color="#94a3b8"
                 />
               </TouchableOpacity>
-              {expandedModules.has(mod.id || String(i)) && mod.topics && mod.topics.map((topic: any, j: number) => (
-                <View key={topic.id || j} style={styles.topicItem}>
-                  <AntDesign name="filetext1" size={16} color="#64748b" />
-                  <Text style={styles.topicName}>{topic.title || topic.name || 'Topic'}</Text>
-                </View>
-              ))}
+              {expandedModules.has(mod.id || String(i)) && mod.topics && mod.topics.map((topic: any, j: number) => {
+                const isPdf = topic.url && (
+                  topic.url.toLowerCase().includes('.pdf') ||
+                  topic.type === 'File' ||
+                  topic.type === 'Link'
+                );
+                return (
+                  <TouchableOpacity
+                    key={topic.id || j}
+                    style={styles.topicItem}
+                    onPress={() => {
+                      if (topic.url) {
+                        (navigation.navigate as any)('PDFViewer', {
+                          title: topic.title || topic.name || 'Document',
+                          courseId: course.id,
+                          fileUrl: topic.url,
+                        });
+                      }
+                    }}
+                    disabled={!topic.url}
+                  >
+                    <AntDesign
+                      name={isPdf ? 'pdffile1' : topic.url ? 'link' : 'filetext1'}
+                      size={16}
+                      color={topic.url ? '#6366f1' : '#94a3b8'}
+                    />
+                    <Text style={[styles.topicName, !topic.url && styles.topicNameDisabled]}>
+                      {topic.title || topic.name || 'Topic'}
+                    </Text>
+                    {topic.url && (
+                      <AntDesign name="right" size={12} color="#94a3b8" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ))}
         </ScrollView>
@@ -739,5 +768,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#475569',
+  },
+  topicNameDisabled: {
+    color: '#94a3b8',
   },
 });

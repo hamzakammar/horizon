@@ -19,6 +19,7 @@ import CoursesScreen from '../screens/CoursesScreen';
 import CourseDetailScreen from '../screens/CourseDetailScreen';
 import PiazzaScreen from '../screens/PiazzaScreen';
 import BookmarksScreen from '../screens/BookmarksScreen';
+import PDFViewerScreen from '../screens/PDFViewerScreen';
 import { ActivityIndicator, View } from 'react-native';
 
 const Stack = createNativeStackNavigator();
@@ -113,6 +114,11 @@ export default function AppNavigator() {
           <Stack.Screen
             name="Bookmarks"
             component={BookmarksScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PDFViewer"
+            component={PDFViewerScreen}
             options={{ headerShown: false }}
           />
           <Stack.Screen

@@ -1273,6 +1273,163 @@ router.get("/d2l/courses/:courseId/content", async (req: Request, res: Response)
   }
 });
 
+/** GET /api/d2l/courses/:courseId/file?url=<encoded> — Proxy a D2L file download (PDF etc) */
+router.get("/d2l/courses/:courseId/file", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { courseId } = req.params;
+  const fileUrl = req.query.url as string;
+
+  if (!fileUrl) {
+    res.status(400).json({ error: "url query param required" });
+    return;
+  }
+
+  try {
+    const { data: credsData } = await supabase
+      .from("user_credentials")
+      .select("host, token")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .limit(1);
+
+    const creds = Array.isArray(credsData) ? credsData[0] : credsData;
+    if (!creds) {
+      res.status(404).json({ error: "D2L credentials not found" });
+      return;
+    }
+
+    // Build full URL if relative
+    const fullUrl = fileUrl.startsWith("http") ? fileUrl : `https://${creds.host}${fileUrl}`;
+
+    // Fetch with session cookies
+    const { getSessionCookies } = await import("../auth-valence.js");
+    const sessionCookies = await getSessionCookies(userId);
+    const cookieHeader = sessionCookies.map((c: any) => `${c.name}=${c.value}`).join("; ");
+
+    const fetchResp = await fetch(fullUrl, {
+      headers: { Cookie: cookieHeader },
+      redirect: "follow",
+    });
+
+    if (!fetchResp.ok) {
+      res.status(fetchResp.status).json({ error: `D2L returned ${fetchResp.status}` });
+      return;
+    }
+
+    const contentType = fetchResp.headers.get("content-type") || "application/octet-stream";
+    const filename = fileUrl.split("/").pop()?.split("?")[0] || "file.pdf";
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    // Stream response body
+    const body = fetchResp.body as any;
+    if (body && body.pipe) {
+      body.pipe(res);
+    } else {
+      const buffer = await fetchResp.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    }
+  } catch (e: any) {
+    console.error("[API] d2l file proxy error:", e);
+    res.status(500).json({ error: "Failed to proxy file", details: e.message });
+  }
+});
+
+/** POST /api/d2l/courses/:courseId/file/save — Download D2L file, upload to S3, process as note */
+router.post("/d2l/courses/:courseId/file/save", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { courseId } = req.params;
+  const { fileUrl, title } = req.body || {};
+
+  if (!fileUrl || !title) {
+    res.status(400).json({ error: "fileUrl and title required" });
+    return;
+  }
+
+  if (!isS3Configured()) {
+    res.status(503).json({ error: "S3 not configured" });
+    return;
+  }
+
+  try {
+    const { data: credsData } = await supabase
+      .from("user_credentials")
+      .select("host, token")
+      .eq("user_id", userId)
+      .eq("service", "d2l")
+      .limit(1);
+
+    const creds = Array.isArray(credsData) ? credsData[0] : credsData;
+    if (!creds) {
+      res.status(404).json({ error: "D2L credentials not found" });
+      return;
+    }
+
+    const fullUrl = fileUrl.startsWith("http") ? fileUrl : `https://${creds.host}${fileUrl}`;
+
+    const { getSessionCookies } = await import("../auth-valence.js");
+    const sessionCookies = await getSessionCookies(userId);
+    const cookieHeader = sessionCookies.map((c: any) => `${c.name}=${c.value}`).join("; ");
+
+    // Download PDF buffer
+    console.error(`[API] Downloading D2L file: ${fullUrl}`);
+    const fetchResp = await fetch(fullUrl, {
+      headers: { Cookie: cookieHeader },
+      redirect: "follow",
+    });
+
+    if (!fetchResp.ok) {
+      res.status(fetchResp.status).json({ error: `D2L returned ${fetchResp.status}` });
+      return;
+    }
+
+    const buffer = Buffer.from(await fetchResp.arrayBuffer());
+    const safeTitle = title.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "document";
+    const noteId = crypto.randomUUID();
+    const s3Key = `users/${userId}/notes/${noteId}-${safeTitle.replace(/ /g, "_")}.pdf`;
+
+    // Upload to S3
+    const { uploadBuffer } = await import("../study/src/s3.js");
+    await uploadBuffer(buffer, s3Key, "application/pdf");
+    console.error(`[API] Uploaded to S3: ${s3Key}`);
+
+    // Create note record
+    const { data: note, error: insertErr } = await supabase
+      .from("notes")
+      .insert({
+        id: noteId,
+        user_id: userId,
+        s3_key: s3Key,
+        title: safeTitle,
+        course_id: courseId || "default",
+        status: "processing",
+      })
+      .select("id")
+      .single();
+
+    if (insertErr || !note) {
+      res.status(500).json({ error: "Failed to create note record", details: insertErr?.message });
+      return;
+    }
+
+    // Process PDF
+    const { ingestPdfBuffer } = await import("../study/src/notes.js");
+    const s3Url = `s3://${getBucket()}/${s3Key}`;
+    const { chunkCount, pageCount } = await ingestPdfBuffer(
+      buffer, userId, note.id, courseId || "default", safeTitle, { url: s3Url }
+    );
+
+    await supabase.from("notes").update({ status: "ready", page_count: pageCount }).eq("id", note.id);
+
+    res.json({ noteId: note.id, status: "ready", chunkCount, pageCount, s3Key });
+  } catch (e: any) {
+    console.error("[API] d2l file save error:", e);
+    res.status(500).json({ error: "Failed to save file as note", details: e.message });
+  }
+});
+
 /** GET /api/piazza/posts — Get stored Piazza posts for a user (from DB) */
 router.get("/piazza/posts", async (req: Request, res: Response) => {
   const userId = req.userId!;
