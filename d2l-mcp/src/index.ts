@@ -427,7 +427,14 @@ async function main() {
     const publicDir = path.join(process.cwd(), "dist", "public");
     app.use(express.static(publicDir));
     app.get("/onboard", (_req, res) => {
-      res.sendFile(path.join(publicDir, "onboard.html"));
+      const filePath = path.join(publicDir, "onboard.html");
+      console.error(`[ONBOARD] Serving from: ${filePath}`);
+      res.sendFile(filePath, (err) => {
+        if (err) {
+          console.error(`[ONBOARD] sendFile error:`, err);
+          res.status(500).send(`File not found: ${filePath}`);
+        }
+      });
     });
 
     // D2L auth routes (browser streaming)
