@@ -424,8 +424,7 @@ async function main() {
     app.get("/health", (_req, res) => res.json({ ok: true }));
 
     // Onboarding page (no auth)
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const publicDir = path.join(__dirname, "public");
+    const publicDir = path.join(process.cwd(), "dist", "public");
     app.use(express.static(publicDir));
     app.get("/onboard", (_req, res) => {
       res.sendFile(path.join(publicDir, "onboard.html"));
