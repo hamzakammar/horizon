@@ -102,7 +102,6 @@ export class BrowserSessionManager {
       "-shared",
       "-forever",
       "-quiet",
-      "-bg"
     ], { stdio: ["ignore", "ignore", "pipe"] });
     x11vncProc.stderr?.on("data", (d: Buffer) => console.error(`[X11VNC] ${d.toString().trim()}`));
     x11vncProc.on("exit", (code) => console.error(`[X11VNC] exited with code ${code}`));
