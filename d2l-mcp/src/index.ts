@@ -425,8 +425,10 @@ async function main() {
 
     // Onboarding page (no auth)
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const publicDir = path.join(__dirname, "public");
+    app.use(express.static(publicDir));
     app.get("/onboard", (_req, res) => {
-      res.sendFile(path.join(__dirname, "public", "onboard.html"));
+      res.sendFile(path.join(publicDir, "onboard.html"));
     });
 
     // D2L auth routes (browser streaming)
