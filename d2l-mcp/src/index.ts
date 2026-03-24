@@ -26,6 +26,7 @@ import { getUserId } from "./utils/userContext.js";
 import { authMiddleware } from "./api/auth.js";
 import apiRoutes from "./api/routes.js";
 import d2lAuthRoutes from "./api/d2lAuthRoutes.js";
+import publicAuthRoutes from "./api/publicAuthRoutes.js";
 import { BrowserSessionManager } from "./browser/BrowserSessionManager.js";
 import { fileURLToPath } from "url";
 
@@ -436,6 +437,9 @@ async function main() {
         }
       });
     });
+
+    // Public auth routes (signup/signin for onboarding — no JWT required)
+    app.use("/auth", publicAuthRoutes);
 
     // D2L auth routes (browser streaming)
     app.use("/", d2lAuthRoutes);

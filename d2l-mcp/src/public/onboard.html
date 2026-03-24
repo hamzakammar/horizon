@@ -3,335 +3,618 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Connect to D2L — Horizon MCP</title>
+  <title>Horizon MCP — Connect D2L</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f0f13;
-      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      background: #060608;
+      color: #f1f5f9;
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 24px;
     }
-    .card {
-      background: #1a1a2e;
-      border: 1px solid #2d2d4e;
-      border-radius: 16px;
-      padding: 40px;
-      max-width: 520px;
-      width: 100%;
-    }
-    .logo {
-      font-size: 28px;
-      font-weight: 700;
-      color: #6366f1;
-      margin-bottom: 8px;
-    }
-    .subtitle {
-      color: #94a3b8;
-      font-size: 15px;
-      margin-bottom: 32px;
-    }
-    .step {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-      align-items: flex-start;
-    }
-    .step-num {
-      width: 28px;
-      height: 28px;
+
+    .glow {
+      position: fixed;
+      width: 600px; height: 600px;
       border-radius: 50%;
-      background: #6366f1;
-      color: white;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
+      background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%);
+      top: -100px; left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Logo */
+    .logo-wrap {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .logo-icon {
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      flex-shrink: 0;
-      margin-top: 2px;
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 16px;
+      font-size: 24px;
+      margin-bottom: 14px;
+      box-shadow: 0 0 32px rgba(99,102,241,0.35);
     }
-    .step-num.done { background: #10b981; }
-    .step-content h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-    .step-content p { font-size: 13px; color: #94a3b8; line-height: 1.5; }
-    .input-group { margin-bottom: 16px; }
-    label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #94a3b8; }
+    .logo-name {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-sub {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Card */
+    .card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(20px);
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .card-sub {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 24px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: rgba(255,255,255,0.04);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 24px;
+    }
+    .tab {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      color: #64748b;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+    }
+    .tab.active {
+      background: rgba(99,102,241,0.2);
+      color: #a5b4fc;
+    }
+
+    /* Form */
+    .field { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #64748b;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
     input {
       width: 100%;
-      background: #0f0f13;
-      border: 1px solid #2d2d4e;
-      border-radius: 8px;
-      padding: 10px 14px;
-      color: #e2e8f0;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #f1f5f9;
       font-size: 14px;
       outline: none;
+      transition: border-color 0.15s;
     }
-    input:focus { border-color: #6366f1; }
+    input::placeholder { color: #334155; }
+    input:focus { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.05); }
+
+    /* Button */
     .btn {
       width: 100%;
-      padding: 12px;
+      padding: 13px;
       border-radius: 10px;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       border: none;
-      transition: opacity 0.2s;
+      transition: all 0.15s;
+      margin-top: 4px;
     }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary { background: #6366f1; color: white; }
-    .btn-primary:hover:not(:disabled) { background: #4f46e5; }
-    .btn-secondary { background: #2d2d4e; color: #e2e8f0; margin-top: 10px; }
-    .status-box {
-      background: #0f0f13;
-      border: 1px solid #2d2d4e;
-      border-radius: 10px;
-      padding: 16px;
-      margin-top: 20px;
-      font-size: 13px;
-    }
-    .status-box.success { border-color: #10b981; background: #0a1a14; }
-    .status-box.error { border-color: #ef4444; background: #1a0a0a; }
-    .status-label { font-weight: 600; margin-bottom: 8px; }
-    .status-label.success { color: #10b981; }
-    .status-label.waiting { color: #f59e0b; }
-    .status-label.error { color: #ef4444; }
-    .mcp-url {
-      background: #0f0f13;
-      border: 1px solid #2d2d4e;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-family: monospace;
-      font-size: 13px;
-      color: #6366f1;
-      word-break: break-all;
-      margin: 8px 0;
-    }
-    .copy-btn {
-      background: none;
-      border: 1px solid #2d2d4e;
-      border-radius: 6px;
-      color: #94a3b8;
-      font-size: 12px;
-      padding: 4px 10px;
-      cursor: pointer;
-      margin-left: 8px;
-    }
-    .copy-btn:hover { color: #e2e8f0; border-color: #6366f1; }
-    .spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid #6366f1;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .hidden { display: none; }
-    .open-browser-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: #6366f1;
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
       color: white;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 6px 24px rgba(99,102,241,0.45);
+      transform: translateY(-1px);
+    }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Error / success */
+    .alert {
+      padding: 10px 14px;
       border-radius: 8px;
-      padding: 10px 18px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+    .alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+    .alert-success { background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); color: #6ee7b7; }
+
+    /* Steps */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .step-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-num.done {
+      background: rgba(16,185,129,0.2);
+      border-color: rgba(16,185,129,0.3);
+      color: #6ee7b7;
+    }
+    .step-num.active {
+      background: rgba(99,102,241,0.3);
+      border-color: rgba(99,102,241,0.6);
+      color: #818cf8;
+      box-shadow: 0 0 10px rgba(99,102,241,0.3);
+    }
+    .step-text h4 { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .step-text p { font-size: 12px; color: #64748b; line-height: 1.5; }
+
+    .open-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: white;
       font-size: 14px;
       font-weight: 600;
+      border-radius: 10px;
       text-decoration: none;
-      margin-top: 12px;
+      box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+      transition: all 0.15s;
+      margin-bottom: 12px;
     }
-    .open-browser-btn:hover { background: #4f46e5; }
+    .open-btn:hover { box-shadow: 0 6px 24px rgba(99,102,241,0.45); transform: translateY(-1px); }
+
+    .waiting-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #fcd34d;
+    }
+
+    /* MCP URL box */
+    .mcp-box {
+      background: rgba(99,102,241,0.08);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 20px;
+    }
+    .mcp-box-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .mcp-url {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: #a5b4fc;
+      word-break: break-all;
+      margin-bottom: 10px;
+    }
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 6px;
+      color: #a5b4fc;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .copy-btn:hover { background: rgba(99,102,241,0.25); }
+
+    .poke-hint {
+      font-size: 11px;
+      color: #475569;
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+    .poke-hint code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #94a3b8;
+      font-size: 11px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+      margin: 20px 0;
+    }
+
+    .success-icon {
+      font-size: 40px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .success-title {
+      font-size: 18px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .success-sub {
+      font-size: 13px;
+      color: #64748b;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .hidden { display: none !important; }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: #6366f1;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+    }
+    .text-center { text-align: center; margin-top: 16px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo">⚡ Horizon MCP</div>
-    <div class="subtitle">Connect your D2L account to use with Poke or any MCP client.</div>
+  <div class="glow"></div>
+  <div class="container">
 
-    <!-- Step 1: Sign in -->
-    <div id="step1">
-      <div class="input-group">
-        <label>Supabase JWT (from Horizon app settings)</label>
-        <input type="password" id="jwt" placeholder="eyJ..." />
+    <div class="logo-wrap">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-name">Horizon MCP</div>
+      <div class="logo-sub">AI-powered access to your D2L courses</div>
+    </div>
+
+    <!-- STEP 1: Auth -->
+    <div id="stepAuth" class="card">
+      <div class="tabs">
+        <button class="tab active" id="tabSignin" onclick="switchTab('signin')">Sign In</button>
+        <button class="tab" id="tabSignup" onclick="switchTab('signup')">Create Account</button>
       </div>
-      <div class="input-group">
-        <label>D2L Host</label>
+
+      <div id="alertBox" class="hidden"></div>
+
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="you@university.ca" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="btn btn-primary" id="authBtn" onclick="handleAuth()">
+        Sign In
+      </button>
+
+      <div class="text-center">
+        <span style="font-size:13px; color:#475569" id="switchText">Don't have an account?</span>
+        <button class="link-btn" id="switchBtn" onclick="switchTab('signup')" style="margin-left:6px">Create one</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: D2L Browser Auth -->
+    <div id="stepD2L" class="card hidden">
+      <div class="card-title">Connect D2L</div>
+      <div class="card-sub">Log in to your university portal to complete setup.</div>
+
+      <div id="d2lAlertBox" class="hidden"></div>
+
+      <div class="field">
+        <label>University D2L Host</label>
         <input type="text" id="d2lHost" value="learn.uwaterloo.ca" />
       </div>
-      <button class="btn btn-primary" id="startBtn" onclick="startAuth()">
-        Connect D2L Account
+
+      <button class="btn btn-primary" id="connectBtn" onclick="startD2L()">
+        Open D2L Login
+      </button>
+
+      <div id="vncStep" class="hidden" style="margin-top:20px">
+        <div class="divider"></div>
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-num done">✓</div>
+            <div class="step-text">
+              <h4>Session started</h4>
+              <p>A secure browser has been opened for you.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num active" id="step2num">2</div>
+            <div class="step-text">
+              <h4>Log in to D2L</h4>
+              <p>Use your university credentials and approve Duo on your phone.</p>
+            </div>
+          </div>
+          <div class="step-item">
+            <div class="step-num" id="step3num">3</div>
+            <div class="step-text">
+              <h4>Auto-detected</h4>
+              <p>We'll capture your session automatically once you're in.</p>
+            </div>
+          </div>
+        </div>
+
+        <a id="vncLink" href="#" target="_blank" class="open-btn">
+          🖥️ Open Login Browser
+        </a>
+
+        <div class="waiting-badge">
+          <span class="spinner" style="border-top-color:#fcd34d; border-color:rgba(252,211,77,0.3)"></span>
+          Waiting for you to log in…
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: Success -->
+    <div id="stepSuccess" class="card hidden">
+      <div class="success-icon">🎉</div>
+      <div class="success-title">You're all set!</div>
+      <div class="success-sub">D2L connected. Use the URL below in Poke or any MCP client.</div>
+
+      <div class="mcp-box">
+        <div class="mcp-box-label">Your MCP Server URL</div>
+        <div class="mcp-url" id="mcpUrl"></div>
+        <button class="copy-btn" onclick="copyUrl()">
+          <span id="copyIcon">📋</span> <span id="copyText">Copy URL</span>
+        </button>
+        <div class="poke-hint">
+          In Poke: <strong>Settings → MCP Servers → Add</strong><br>
+          Paste the URL above, then add header:<br>
+          <code>Authorization: Bearer &lt;your token&gt;</code>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <button class="link-btn" style="display:block; text-align:center; width:100%" onclick="reset()">
+        Connect another account
       </button>
     </div>
 
-    <!-- Step 2: Browser session -->
-    <div id="step2" class="hidden">
-      <div class="step">
-        <div class="step-num done">1</div>
-        <div class="step-content">
-          <h3>Session started</h3>
-          <p>A browser window has been opened for you. Click below to open it and log in.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-num" id="step2num">2</div>
-        <div class="step-content">
-          <h3>Log in to D2L</h3>
-          <p>Use your university credentials and approve the Duo push notification on your phone.</p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-num" id="step3num">3</div>
-        <div class="step-content">
-          <h3>Done — we capture the rest</h3>
-          <p>Once you're logged in, this page will update automatically.</p>
-        </div>
-      </div>
-
-      <a id="vncLink" href="#" target="_blank" class="open-browser-btn">
-        🖥️ Open Login Browser
-      </a>
-
-      <div class="status-box" id="statusBox">
-        <div class="status-label waiting">
-          <span class="spinner"></span> Waiting for you to log in...
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 3: Success -->
-    <div id="step3" class="hidden">
-      <div class="status-box success">
-        <div class="status-label success">✅ D2L connected successfully!</div>
-        <p style="color:#94a3b8; margin-top:8px; font-size:13px;">Your credentials are saved. Use the MCP URL below in Poke.</p>
-      </div>
-
-      <div style="margin-top:24px;">
-        <label style="display:block; font-size:13px; font-weight:500; color:#94a3b8; margin-bottom:6px;">
-          Your MCP URL
-          <button class="copy-btn" onclick="copyUrl()">Copy</button>
-        </label>
-        <div class="mcp-url" id="mcpUrl"></div>
-        <p style="font-size:12px; color:#64748b; margin-top:8px;">
-          In Poke: Settings → MCP Servers → Add → paste this URL → add header <code style="color:#6366f1">Authorization: Bearer &lt;your JWT&gt;</code>
-        </p>
-      </div>
-
-      <button class="btn btn-secondary" onclick="reset()">Connect another account</button>
-    </div>
-
-    <!-- Error state -->
-    <div id="stepError" class="hidden">
-      <div class="status-box error">
-        <div class="status-label error">❌ Session failed or timed out</div>
-        <p style="color:#94a3b8; margin-top:8px; font-size:13px;">The session expired (10 minute limit). Please try again.</p>
-      </div>
-      <button class="btn btn-secondary" style="margin-top:16px;" onclick="reset()">Try again</button>
-    </div>
   </div>
 
   <script>
-    const API_BASE = window.location.origin;
+    const API = window.location.origin;
+    let mode = 'signin';
+    let token = null;
     let pollInterval = null;
-    let currentSessionId = null;
-    let currentJwt = null;
+    let sessionId = null;
 
-    async function startAuth() {
-      const jwt = document.getElementById('jwt').value.trim();
-      const d2lHost = document.getElementById('d2lHost').value.trim();
+    function switchTab(t) {
+      mode = t;
+      document.getElementById('tabSignin').classList.toggle('active', t === 'signin');
+      document.getElementById('tabSignup').classList.toggle('active', t === 'signup');
+      document.getElementById('authBtn').textContent = t === 'signin' ? 'Sign In' : 'Create Account';
+      document.getElementById('switchText').textContent = t === 'signin' ? "Don't have an account?" : 'Already have an account?';
+      document.getElementById('switchBtn').textContent = t === 'signin' ? 'Create one' : 'Sign in';
+      document.getElementById('switchBtn').onclick = () => switchTab(t === 'signin' ? 'signup' : 'signin');
+      clearAlert();
+    }
 
-      if (!jwt) { alert('Please enter your JWT'); return; }
+    function showAlert(msg, type = 'error') {
+      const box = document.getElementById('alertBox');
+      box.className = `alert alert-${type}`;
+      box.textContent = msg;
+      box.classList.remove('hidden');
+    }
+    function clearAlert() {
+      document.getElementById('alertBox').classList.add('hidden');
+    }
 
-      currentJwt = jwt;
-      const btn = document.getElementById('startBtn');
+    async function handleAuth() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) { showAlert('Please enter your email and password'); return; }
+
+      const btn = document.getElementById('authBtn');
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Starting...';
+      btn.innerHTML = '<span class="spinner"></span>' + (mode === 'signin' ? 'Signing in…' : 'Creating account…');
+      clearAlert();
 
       try {
-        const res = await fetch(`${API_BASE}/auth/d2l/start`, {
+        const res = await fetch(`${API}/auth/${mode === 'signin' ? 'signin' : 'signup'}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Authentication failed');
+        if (data.needsConfirmation) {
+          showAlert('Check your email to confirm your account, then sign in.', 'success');
+          switchTab('signin');
+          btn.disabled = false;
+          btn.textContent = 'Sign In';
+          return;
+        }
+        token = data.token;
+        document.getElementById('stepAuth').classList.add('hidden');
+        document.getElementById('stepD2L').classList.remove('hidden');
+      } catch (e) {
+        showAlert(e.message);
+        btn.disabled = false;
+        btn.textContent = mode === 'signin' ? 'Sign In' : 'Create Account';
+      }
+    }
+
+    async function startD2L() {
+      const d2lHost = document.getElementById('d2lHost').value.trim();
+      const btn = document.getElementById('connectBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Starting session…';
+
+      const alertBox = document.getElementById('d2lAlertBox');
+      alertBox.classList.add('hidden');
+
+      try {
+        const res = await fetch(`${API}/auth/d2l/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ d2lHost }),
         });
-
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || 'Failed to start session');
-        }
-
         const data = await res.json();
-        currentSessionId = data.sessionId;
+        if (!res.ok) throw new Error(data.error || 'Failed to start session');
 
+        sessionId = data.sessionId;
         document.getElementById('vncLink').href = data.vncUrl;
-        document.getElementById('step1').classList.add('hidden');
-        document.getElementById('step2').classList.remove('hidden');
-
-        // Poll for status
-        pollInterval = setInterval(pollStatus, 2000);
-
-      } catch (err) {
+        document.getElementById('vncStep').classList.remove('hidden');
+        btn.innerHTML = '↺ Restart Session';
         btn.disabled = false;
-        btn.innerHTML = 'Connect D2L Account';
-        alert(err.message);
+
+        pollInterval = setInterval(pollStatus, 2500);
+      } catch (e) {
+        alertBox.className = 'alert alert-error';
+        alertBox.textContent = e.message;
+        alertBox.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Open D2L Login';
       }
     }
 
     async function pollStatus() {
-      if (!currentSessionId) return;
+      if (!sessionId) return;
       try {
-        const res = await fetch(`${API_BASE}/auth/d2l/status/${currentSessionId}`);
+        const res = await fetch(`${API}/auth/d2l/status/${sessionId}`);
         const data = await res.json();
-
         if (data.status === 'authenticated') {
           clearInterval(pollInterval);
-          showSuccess();
+          document.getElementById('step2num').className = 'step-num done';
+          document.getElementById('step2num').textContent = '✓';
+          document.getElementById('step3num').className = 'step-num done';
+          document.getElementById('step3num').textContent = '✓';
+          setTimeout(showSuccess, 800);
         } else if (data.status === 'failed' || data.status === 'no_session') {
           clearInterval(pollInterval);
-          showError();
+          const alertBox = document.getElementById('d2lAlertBox');
+          alertBox.className = 'alert alert-error';
+          alertBox.textContent = 'Session expired or failed. Please try again.';
+          alertBox.classList.remove('hidden');
         }
       } catch {}
     }
 
     function showSuccess() {
-      document.getElementById('step2').classList.add('hidden');
-      document.getElementById('step3').classList.remove('hidden');
-      const mcpUrl = `${API_BASE}/mcp`;
-      document.getElementById('mcpUrl').textContent = mcpUrl;
-    }
-
-    function showError() {
-      document.getElementById('step2').classList.add('hidden');
-      document.getElementById('stepError').classList.remove('hidden');
+      document.getElementById('stepD2L').classList.add('hidden');
+      document.getElementById('stepSuccess').classList.remove('hidden');
+      document.getElementById('mcpUrl').textContent = `${API}/mcp`;
     }
 
     function copyUrl() {
       const url = document.getElementById('mcpUrl').textContent;
       navigator.clipboard.writeText(url).then(() => {
-        const btn = document.querySelector('.copy-btn');
-        btn.textContent = 'Copied!';
-        setTimeout(() => btn.textContent = 'Copy', 2000);
+        document.getElementById('copyIcon').textContent = '✅';
+        document.getElementById('copyText').textContent = 'Copied!';
+        setTimeout(() => {
+          document.getElementById('copyIcon').textContent = '📋';
+          document.getElementById('copyText').textContent = 'Copy URL';
+        }, 2000);
       });
     }
 
     function reset() {
-      currentSessionId = null;
-      currentJwt = null;
+      token = null; sessionId = null;
       if (pollInterval) clearInterval(pollInterval);
-      document.getElementById('step1').classList.remove('hidden');
-      document.getElementById('step3').classList.add('hidden');
-      document.getElementById('stepError').classList.add('hidden');
-      document.getElementById('startBtn').disabled = false;
-      document.getElementById('startBtn').innerHTML = 'Connect D2L Account';
+      document.getElementById('stepAuth').classList.remove('hidden');
+      document.getElementById('stepD2L').classList.add('hidden');
+      document.getElementById('stepSuccess').classList.add('hidden');
+      document.getElementById('vncStep').classList.add('hidden');
+      document.getElementById('authBtn').disabled = false;
+      document.getElementById('authBtn').textContent = 'Sign In';
+      switchTab('signin');
     }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (!document.getElementById('stepAuth').classList.contains('hidden')) handleAuth();
+      }
+    });
   </script>
 </body>
 </html>
