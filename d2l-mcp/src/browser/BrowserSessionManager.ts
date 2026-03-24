@@ -88,9 +88,11 @@ export class BrowserSessionManager {
       `:${displayNum}`,
       "-screen", "0", "1280x800x24",
       "-ac", "-nolisten", "tcp"
-    ], { stdio: "ignore" });
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    xvfbProc.stderr?.on("data", (d: Buffer) => console.error(`[XVFB] ${d.toString().trim()}`));
+    xvfbProc.on("exit", (code) => console.error(`[XVFB] exited with code ${code}`));
 
-    await new Promise(r => setTimeout(r, 500)); // Wait for Xvfb to start
+    await new Promise(r => setTimeout(r, 1000)); // Wait for Xvfb to start
 
     // 2. Start x11vnc to share the display
     const x11vncProc = spawn("x11vnc", [
@@ -101,7 +103,9 @@ export class BrowserSessionManager {
       "-forever",
       "-quiet",
       "-bg"
-    ], { stdio: "ignore" });
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    x11vncProc.stderr?.on("data", (d: Buffer) => console.error(`[X11VNC] ${d.toString().trim()}`));
+    x11vncProc.on("exit", (code) => console.error(`[X11VNC] exited with code ${code}`));
 
     await new Promise(r => setTimeout(r, 300));
 
@@ -117,7 +121,7 @@ export class BrowserSessionManager {
 
     // 4. Launch Playwright browser on the virtual display
     const browser = await chromium.launch({
-      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium-browser",
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium",
       headless: false,
       env: { ...process.env, DISPLAY: `:${displayNum}` },
       args: [
