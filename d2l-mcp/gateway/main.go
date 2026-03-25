@@ -64,6 +64,17 @@ func main() {
 		IdleTimeout:  180 * time.Second,
 	}
 
+	// Forward WebSocket upgrades directly to Node worker (for noVNC)
+	// chi router doesn't handle WS upgrades — must attach to the raw server
+	nodeURL := nodeWorkerURL()
+	srv.Handler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Upgrade") == "websocket" {
+			handlers.ProxyWebSocket(nodeURL, w, req)
+			return
+		}
+		r.ServeHTTP(w, req)
+	})
+
 	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintf(os.Stderr, "[GATEWAY] Fatal: %v\n", err)
 		os.Exit(1)
