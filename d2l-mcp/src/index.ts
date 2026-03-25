@@ -23,6 +23,8 @@ import { NotesTools } from "./study/src/notes.js";
 import { SyncTools } from "./study/src/sync.js";
 import { PiazzaTools } from "./study/src/piazza.js";
 import { getUserId } from "./utils/userContext.js";
+import { embedText } from "./rag/embeddings.js";
+import { semanticSearch } from "./rag/vectorStore.js";
 import { authMiddleware } from "./api/auth.js";
 import apiRoutes from "./api/routes.js";
 import d2lAuthRoutes from "./api/d2lAuthRoutes.js";
@@ -341,6 +343,39 @@ function createServer(): McpServer {
     NotesTools.notes_embed_missing.description,
     NotesTools.notes_embed_missing.schema,
     wrapStudyToolHandler("notes_embed_missing", NotesTools.notes_embed_missing.handler)
+  );
+
+  // RAG semantic search over note_chunks (vector embeddings in note_chunks table)
+  server.tool(
+    "semantic_search_notes",
+    "Semantic (vector) search over your note chunks using AI embeddings. Returns the most relevant note passages for a given query, ranked by cosine similarity. Optionally filter by course ID.",
+    {
+      query: z.string().describe("Natural language search query (e.g., 'integration by parts', 'Newton's second law')."),
+      courseId: z.string().optional().describe("Optionally restrict search to a specific course ID (e.g., 'MATH119')."),
+      limit: z.number().optional().describe("Maximum number of results to return. Defaults to 10."),
+    },
+    wrapStudyToolHandler("semantic_search_notes", async ({ query, courseId, limit = 10, userId }: { query: string; courseId?: string; limit?: number; userId: string }) => {
+      if (!query) {
+        return JSON.stringify({ success: false, error: "query is required" }, null, 2);
+      }
+      try {
+        const queryEmbedding = await embedText(query);
+        const results = await semanticSearch(userId, queryEmbedding, courseId, limit);
+        if (results.length === 0) {
+          return JSON.stringify({ success: true, query, courseId, count: 0, results: [], message: "No matching note chunks found" }, null, 2);
+        }
+        const formatted = results.map((r) => ({
+          similarity: Math.round(r.similarity * 1000) / 1000,
+          courseId: r.courseId,
+          chunkIndex: r.chunkIndex,
+          preview: r.content.slice(0, 300),
+          metadata: r.metadata,
+        }));
+        return JSON.stringify({ success: true, query, courseId, count: formatted.length, results: formatted }, null, 2);
+      } catch (error) {
+        return JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }, null, 2);
+      }
+    })
   );
 
   server.tool(

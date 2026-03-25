@@ -4,6 +4,8 @@ import path from "node:path";
 import { homedir } from "node:os";
 import { createRequire } from "node:module";
 import { z } from "zod";
+import { chunkText as ragChunkText, embedChunks } from "../../rag/embeddings.js";
+import { upsertChunks, deleteNoteChunks } from "../../rag/vectorStore.js";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text?: string; numpages?: number }>;
@@ -238,6 +240,25 @@ export async function ingestPdfBuffer(
 		}
 		console.error(`[INGEST] Batch ${i / INSERT_BATCH_SIZE + 1} inserted successfully`);
 	}
+
+	// --- RAG: embed chunks into note_chunks for semantic search ---
+	try {
+		console.error(`[INGEST] Embedding ${chunks.length} chunks into note_chunks...`);
+		// Delete any previously stored chunks for this note to avoid duplicates
+		await deleteNoteChunks(noteId);
+		// Use smaller RAG chunk size (500 chars) for better semantic precision
+		const ragChunks = ragChunkText(text, 500, 50);
+		const embeddings = await embedChunks(ragChunks);
+		await upsertChunks(userId, noteId, courseId, ragChunks, embeddings, {
+			title,
+			source: url || `s3://${process.env.S3_BUCKET || 'unknown'}/${opts.url || ''}`,
+		});
+		console.error(`[INGEST] Successfully embedded ${ragChunks.length} RAG chunks for noteId: ${noteId}`);
+	} catch (ragError) {
+		// RAG errors are non-fatal — existing note_sections ingest succeeded
+		console.error(`[INGEST] RAG embedding failed (non-fatal):`, ragError instanceof Error ? ragError.message : String(ragError));
+	}
+
 	return { chunkCount: rows.length, pageCount };
 }
 

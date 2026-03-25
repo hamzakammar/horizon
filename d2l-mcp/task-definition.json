@@ -10,6 +10,43 @@
   "taskRoleArn": "arn:aws:iam::051140201449:role/ecsTaskRole",
   "containerDefinitions": [
     {
+      "name": "gateway",
+      "image": "051140201449.dkr.ecr.us-east-1.amazonaws.com/study-mcp-gateway:latest",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_WORKER_URL",
+          "value": "http://localhost:3000"
+        },
+        {
+          "name": "SUPABASE_URL",
+          "value": "https://qialmumlcezeqvyyhjlu.supabase.co"
+        },
+        {
+          "name": "SUPABASE_JWKS_URL",
+          "value": "https://qialmumlcezeqvyyhjlu.supabase.co/auth/v1/.well-known/jwks.json"
+        },
+        {
+          "name": "PORT",
+          "value": "8080"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/study-mcp-gateway",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "essential": true
+    },
+    {
       "name": "backend",
       "image": "051140201449.dkr.ecr.us-east-1.amazonaws.com/study-mcp-backend:latest",
       "portMappings": [
@@ -42,6 +79,10 @@
         {
           "name": "API_HOST",
           "value": "api.hamzaammar.ca"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "value": "REPLACE_ME"
         }
       ],
       "secrets": [
@@ -68,10 +109,6 @@
         {
           "name": "AWS_REGION",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/aws-region-e14xXT"
-        },
-        {
-          "name": "OPENAI_API_KEY",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/openai-key-iq9IEH"
         },
         {
           "name": "D2L_HOST",
