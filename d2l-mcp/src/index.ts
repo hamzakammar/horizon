@@ -821,7 +821,7 @@ async function main() {
             changeOrigin: true,
             pathRewrite: { [`^/vnc/${sessionId}/websockify`]: "/" },
           });
-          wsProxy.upgrade(req, socket, head);
+          wsProxy.upgrade(req, socket as any, head);
         } else {
           socket.destroy();
         }
