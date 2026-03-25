@@ -79,7 +79,7 @@
         {
           "name": "API_HOST",
           "value": "api.hamzaammar.ca"
-        },
+        }
       ],
       "secrets": [
         {
