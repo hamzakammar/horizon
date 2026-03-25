@@ -195,4 +195,12 @@ export class D2LClient {
   }
 }
 
-export const client = new D2LClient();
+// Lazy proxy — picks up the current request's userId from AsyncLocalStorage on each call.
+import { getUserId } from "./utils/userContext.js";
+
+export const client: D2LClient = new Proxy({} as D2LClient, {
+  get(_target, prop) {
+    const instance = new D2LClient(getUserId());
+    return (instance as any)[prop]?.bind(instance);
+  },
+});
