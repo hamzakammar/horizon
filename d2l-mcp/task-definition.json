@@ -36,6 +36,12 @@
           "value": "8080"
         }
       ],
+      "secrets": [
+        {
+          "name": "SUPABASE_JWT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-jwt-secret-kXQTMN"
+        }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
