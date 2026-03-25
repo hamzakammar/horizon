@@ -63,6 +63,23 @@ export interface BrowserSession {
 }
 
 const activeSessions = new Map<string, BrowserSession>();
+
+/** Wait until Xvfb's Unix socket exists (means it's ready to accept connections). */
+async function waitForXvfb(displayNum: number, timeoutMs = 5000): Promise<void> {
+  const socketPath = `/tmp/.X11-unix/X${displayNum}`;
+  const fs = await import("fs");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      fs.accessSync(socketPath);
+      console.log(`[XVFB] display :${displayNum} ready`);
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+  throw new Error(`Xvfb display :${displayNum} did not start within ${timeoutMs}ms`);
+}
 const userSessionMap = new Map<string, string>(); // userId → sessionId
 
 export class BrowserSessionManager {
@@ -87,12 +104,14 @@ export class BrowserSessionManager {
     const xvfbProc = spawn("Xvfb", [
       `:${displayNum}`,
       "-screen", "0", "1280x800x24",
-      "-ac", "-nolisten", "tcp"
-    ], { stdio: ["ignore", "ignore", "pipe"] });
+      "-ac",
+    ], { stdio: ["ignore", "pipe", "pipe"] });
+    xvfbProc.stdout?.on("data", (d: Buffer) => console.log(`[XVFB] ${d.toString().trim()}`));
     xvfbProc.stderr?.on("data", (d: Buffer) => console.error(`[XVFB] ${d.toString().trim()}`));
-    xvfbProc.on("exit", (code) => console.error(`[XVFB] exited with code ${code}`));
+    xvfbProc.on("exit", (code) => console.error(`[XVFB :${displayNum}] exited with code ${code}`));
 
-    await new Promise(r => setTimeout(r, 1000)); // Wait for Xvfb to start
+    // Wait for Xvfb Unix socket to appear (up to 5s)
+    await waitForXvfb(displayNum, 5000);
 
     // 2. Start x11vnc to share the display
     const x11vncProc = spawn("x11vnc", [
