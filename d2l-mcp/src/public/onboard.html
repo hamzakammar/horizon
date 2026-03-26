@@ -907,7 +907,9 @@
     async function loadNotes() {
       try {
         const res = await fetch(`${API}/api/notes`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const { notes } = await res.json();
+        if (!res.ok) { showAlert('uploadAlertBox', `Failed to load notes: ${res.status}`); return; }
+        const data = await res.json();
+        const notes = data.notes || data;
         const el = document.getElementById('notesList');
         if (!notes?.length) { el.innerHTML = ''; return; }
         el.innerHTML = notes.map(n => `
@@ -917,7 +919,9 @@
             <span style="color:var(--muted);font-size:11px">${n.status === 'ready' ? 'Ready' : n.status}</span>
             <button onclick="deleteNote('${n.id}', this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0;line-height:1" title="Delete">×</button>
           </div>`).join('');
-      } catch {}
+      } catch (e: any) {
+        showAlert('uploadAlertBox', `Failed to load notes: ${e.message}`);
+      }
     }
 
     async function deleteNote(id, btn) {
