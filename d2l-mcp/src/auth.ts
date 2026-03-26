@@ -269,19 +269,6 @@ export async function getToken(userId?: string): Promise<string> {
     // Silent re-login failed — Duo required
     await markDuoRequired(userId);
     throw new Error("REAUTH_REQUIRED");
-      // Continue to authentication flow below
-    } else {
-      // User has no credentials, check env token as fallback
-      const envToken = process.env.D2L_TOKEN;
-      if (envToken) {
-        console.error(`[AUTH] No user credentials found, using D2L_TOKEN from environment variable`);
-        userTokenCache[cacheKey] = {
-          token: envToken,
-          expiresAt: Date.now() + 82800000, // 23 hours
-        };
-        return envToken;
-      }
-    }
   } else {
     // No userId - use env token if available (legacy behavior)
     const envToken = process.env.D2L_TOKEN;
