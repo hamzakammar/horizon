@@ -40,6 +40,10 @@
         {
           "name": "SUPABASE_JWT_SECRET",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-jwt-secret-kXQTMN"
+        },
+        {
+          "name": "SUPABASE_ANON_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-anon-key-4NVXCo"
         }
       ],
       "logConfiguration": {
