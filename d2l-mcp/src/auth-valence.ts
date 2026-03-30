@@ -70,10 +70,20 @@ async function getStoredSession(userId?: string): Promise<SessionData | null> {
     const cred = Array.isArray(data) ? data[0] : data;
     
     if (!error && cred && cred.token) {
-      // Token should be cookie string
-      const host = cred.host || process.env.D2L_HOST || "learn.ul.ie";
-      const cookieString = cred.token;
-      
+      // Token may be JSON {d2lSessionVal, d2lSecureSessionVal} or a plain cookie string
+      const host = cred.host || process.env.D2L_HOST || "learn.uwaterloo.ca";
+      let cookieString = cred.token;
+
+      // Normalise JSON token → cookie string
+      try {
+        const parsed = JSON.parse(cred.token);
+        if (parsed.d2lSessionVal && parsed.d2lSecureSessionVal) {
+          cookieString = `d2lSessionVal=${parsed.d2lSessionVal}; d2lSecureSessionVal=${parsed.d2lSecureSessionVal}`;
+        }
+      } catch {
+        // Already a plain cookie string — use as-is
+      }
+
       // Parse cookie string into object
       const cookies: D2LSessionCookies = {};
       cookieString.split(';').forEach((cookie: string) => {
@@ -82,17 +92,17 @@ async function getStoredSession(userId?: string): Promise<SessionData | null> {
           cookies[name] = value;
         }
       });
-      
-      // Check if session is still valid (cookies expire after ~23 hours)
+
+      // Check if session is still valid
       const tokenAge = Date.now() - (new Date(cred.updated_at || 0).getTime());
-      const maxAge = 20 * 60 * 60 * 1000; // 20 hours
-      
+      const maxAge = 23 * 60 * 60 * 1000; // 23 hours
+
       if (tokenAge < maxAge && Object.keys(cookies).length > 0) {
         return {
           cookies,
           cookieString,
           host,
-          expiresAt: Date.now() + (23 * 60 * 60 * 1000) // 23 hours
+          expiresAt: Date.now() + (23 * 60 * 60 * 1000)
         };
       }
     }
