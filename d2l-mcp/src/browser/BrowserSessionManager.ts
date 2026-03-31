@@ -137,7 +137,7 @@ export class BrowserSessionManager {
    * Restores previous ADFS/D2L cookies from S3 — skips Duo if session still valid.
    * Returns the noVNC URL the user should open.
    */
-  static async startSession(userId: string, d2lHost: string): Promise<{ sessionId: string; vncUrl: string }> {
+  static async startSession(userId: string, d2lHost: string, apiHost?: string): Promise<{ sessionId: string; vncUrl: string }> {
     // Close any existing session for this user
     const existingId = userSessionMap.get(userId);
     if (existingId) {
@@ -219,7 +219,7 @@ export class BrowserSessionManager {
 
     const session: BrowserSession = {
       sessionId, userId, d2lHost,
-      vncUrl: `https://${process.env.API_HOST || "api.hamzaammar.ca"}/vnc/${sessionId}/vnc.html?autoconnect=true&reconnect=true&path=vnc/${sessionId}/websockify`,
+      vncUrl: `https://${apiHost || process.env.API_HOST || "api.hamzaammar.ca"}/vnc/${sessionId}/vnc.html?autoconnect=true&reconnect=true&path=vnc/${sessionId}/websockify`,
       wsPort, vncPort, displayNum,
       browser, context, page,
       xvfbProc, x11vncProc, websockifyProc,
