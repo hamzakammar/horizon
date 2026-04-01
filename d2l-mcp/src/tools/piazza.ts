@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getPiazzaCookieHeader } from "../study/piazzaAuth.js";
+import { getUserId } from "../utils/userContext.js";
 
 // Piazza API base URL
 const PIAZZA_API = "https://piazza.com/logic/api";
@@ -12,7 +13,8 @@ interface PiazzaToolDefinition {
 }
 
 async function fetchPiazza(method: string, params: Record<string, any>): Promise<any> {
-  const cookieHeader = await getPiazzaCookieHeader();
+  const userId = getUserId();
+  const cookieHeader = await getPiazzaCookieHeader(userId);
   
   // Extract session_id from cookies to use as CSRF token
   const sessionIdMatch = cookieHeader.match(/session_id=([^;]+)/);
@@ -66,7 +68,8 @@ async function getClassPosts(classId: string, limit: number = 20): Promise<strin
       offset: 0,
     });
 
-    const posts = result.result || [];
+    const feed = result.result?.feed || result.result || [];
+    const posts = Array.isArray(feed) ? feed : [];
     return JSON.stringify(
       posts.map((p: any) => ({
         id: p.id,

@@ -203,70 +203,32 @@ export async function getPiazzaAuthenticatedContext(userId?: string): Promise<Br
 
 export async function getPiazzaCookieHeader(userId?: string): Promise<string> {
   const isProduction = process.env.NODE_ENV === "production" || process.env.AWS_EXECUTION_ENV !== undefined || !process.env.DISPLAY;
-  
-  // First, try to get cookies from database (WebView login)
+
+  console.error(`[PIAZZA_AUTH] getPiazzaCookieHeader called, userId=${userId}, isProduction=${isProduction}`);
   if (userId) {
     try {
-      const { data, error } = await supabase
-        .from("user_credentials")
-        .select("token")
-        .eq("user_id", userId)
-        .eq("service", "piazza")
-        .single();
-      
-      if (!error && data?.token) {
-        const cookieHeader = data.token;
-        // Validate cookies before returning (check for session_id and test API call)
-        if (cookieHeader.includes("session_id=")) {
-          // Test cookie validity by making a lightweight API call
-          try {
-            const testResponse = await fetch("https://piazza.com/logic/api?method=network.get_my_feed", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "accept": "application/json",
-                "cookie": cookieHeader,
-              },
-              body: JSON.stringify({ method: "network.get_my_feed", params: { limit: 1 } }),
-            });
-
-            const responseText = await testResponse.text();
-            // If we get HTML, cookies are invalid
-            if (responseText.trim().startsWith("<!DOCTYPE html") || responseText.trim().startsWith("<html")) {
-              console.error("[PIAZZA_AUTH] Stored cookies are invalid (got HTML response), deleting from DB");
-              // Delete invalid cookies from DB
-              await supabase
-                .from("user_credentials")
-                .delete()
-                .eq("user_id", userId)
-                .eq("service", "piazza");
-            } else if (testResponse.ok) {
-              // Cookies are valid
-              console.error("[PIAZZA_AUTH] Using validated cookies from database");
+      // Use direct REST API call — the Supabase JS client has issues reading piazza rows
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+      if (supabaseUrl && supabaseKey) {
+        const restUrl = `${supabaseUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.piazza&select=token&limit=1`;
+        const restResp = await fetch(restUrl, {
+          headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+        });
+        if (restResp.ok) {
+          const rows = await restResp.json() as Array<{ token: string }>;
+          if (rows.length > 0 && rows[0].token) {
+            const cookieHeader = rows[0].token;
+            if (cookieHeader.includes("session_id=")) {
+              console.error("[PIAZZA_AUTH] Using cookies from database (REST)");
               return cookieHeader;
-            } else {
-              console.error("[PIAZZA_AUTH] Cookie validation failed with status:", testResponse.status, "Deleting from DB");
-              await supabase
-                .from("user_credentials")
-                .delete()
-                .eq("user_id", userId)
-                .eq("service", "piazza");
             }
-          } catch (validationError) {
-            console.error("[PIAZZA_AUTH] Cookie validation error:", validationError, "Deleting from DB");
-            await supabase
-              .from("user_credentials")
-              .delete()
-              .eq("user_id", userId)
-              .eq("service", "piazza");
+            console.error("[PIAZZA_AUTH] Stored cookies missing session_id");
+          } else {
+            console.error("[PIAZZA_AUTH] No piazza credentials found in DB");
           }
         } else {
-          console.error("[PIAZZA_AUTH] Stored cookies missing session_id, deleting from DB");
-          await supabase
-            .from("user_credentials")
-            .delete()
-            .eq("user_id", userId)
-            .eq("service", "piazza");
+          console.error(`[PIAZZA_AUTH] REST query failed: ${restResp.status}`);
         }
       }
     } catch (e) {

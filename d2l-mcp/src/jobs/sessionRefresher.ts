@@ -44,15 +44,23 @@ export async function refreshD2LSession(userId: string): Promise<RefreshResult> 
     return { success: false, reason: "no_stored_state" };
   }
 
-  // 2. Get the user's D2L host
-  const { data: cred } = await supabase
-    .from("user_credentials")
-    .select("host")
-    .eq("user_id", userId)
-    .eq("service", "d2l")
-    .limit(1);
-
-  const d2lHost = (Array.isArray(cred) ? cred[0] : cred)?.host || process.env.D2L_HOST || "learn.uwaterloo.ca";
+  // 2. Get the user's D2L host via direct REST API
+  let d2lHost = process.env.D2L_HOST || "learn.uwaterloo.ca";
+  try {
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey) {
+      const resp = await fetch(`${sbUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.d2l&select=host&limit=1`, {
+        headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+      });
+      if (resp.ok) {
+        const rows = await resp.json() as Array<{ host: string }>;
+        if (rows.length > 0 && rows[0].host) d2lHost = rows[0].host;
+      }
+    }
+  } catch (e) {
+    console.error("[REFRESH] Error fetching D2L host:", e);
+  }
 
   let browser;
   try {

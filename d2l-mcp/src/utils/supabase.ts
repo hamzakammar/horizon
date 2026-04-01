@@ -266,7 +266,12 @@ if (supabaseUrl.startsWith('postgresql://')) {
   if (!supabaseKey) {
     throw new Error('Missing Supabase key: SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY required for Supabase URLs');
   }
-  supabase = createClient(supabaseUrl, supabaseKey);
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 }
 
 export { supabase };
