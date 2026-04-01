@@ -23,7 +23,8 @@ router.post("/auth/d2l/start", authMiddleware, async (req: Request, res: Respons
   const d2lHost = (req.body?.d2lHost as string) || process.env.D2L_HOST || "learn.uwaterloo.ca";
 
   try {
-    const { sessionId, vncUrl } = await BrowserSessionManager.startSession(userId, d2lHost);
+    const reqHost = req.hostname || process.env.API_HOST || "api.hamzaammar.ca";
+    const { sessionId, vncUrl } = await BrowserSessionManager.startSession(userId, d2lHost, reqHost);
     res.json({
       sessionId,
       vncUrl,

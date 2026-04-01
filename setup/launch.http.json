@@ -1,8 +1,0 @@
-{
-  "name": "Study MCP (HTTP)",
-  "transport": "http",
-  "url": "http://localhost:3000/mcp",
-  "headers": {
-    "Authorization": "Bearer 88a1824ab39d0593c43a144638054119b35949bcb5901c2b30721ef6ad1eada7"
-  }
-}

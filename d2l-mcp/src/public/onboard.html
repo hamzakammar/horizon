@@ -11,25 +11,25 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0a0a0f;
-      --surface:   #111118;
-      --border:    rgba(255,255,255,0.07);
-      --border-hi: rgba(255,255,255,0.12);
-      --text:      #f1f5f9;
-      --muted:     #64748b;
-      --subtle:    #1e293b;
-      --accent:    #6366f1;
-      --accent-hi: #818cf8;
-      --accent-glow: rgba(99,102,241,0.25);
-      --success:   #10b981;
-      --warn:      #f59e0b;
-      --danger:    #ef4444;
-      --radius:    12px;
-      --radius-sm: 8px;
+      --bg:        #f5f5f4;
+      --surface:   #ffffff;
+      --surface2:  #fafaf9;
+      --border:    #e7e5e4;
+      --border-hi: #d6d3d1;
+      --text:      #1c1917;
+      --muted:     #78716c;
+      --subtle:    #f5f5f4;
+      --accent:    #0f172a;
+      --accent-hi: #1e293b;
+      --success:   #16a34a;
+      --warn:      #d97706;
+      --danger:    #dc2626;
+      --radius:    10px;
+      --radius-sm: 7px;
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -40,285 +40,266 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Background gradient */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.08) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
     .wrap {
       width: 100%;
       max-width: 400px;
-      position: relative;
-      z-index: 1;
     }
 
-    /* ── Header ───────────────────────────────────────────────────────── */
+    /* ── Header ─────────────────────────────────────────────────── */
     .header {
       text-align: center;
-      margin-bottom: 32px;
+      margin-bottom: 24px;
     }
 
     .logo {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 48px; height: 48px;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      border-radius: 14px;
-      font-size: 22px;
-      margin-bottom: 16px;
-      box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 8px 24px rgba(99,102,241,0.2);
+      width: 44px; height: 44px;
+      background: var(--text);
+      border-radius: 10px;
+      font-size: 20px;
+      margin-bottom: 14px;
     }
 
     .header h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.4px;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.3px;
       color: var(--text);
-      margin-bottom: 4px;
-    }
-
-    .header p {
-      font-size: 13.5px;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    /* ── Card ─────────────────────────────────────────────────────────── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 28px;
-    }
-
-    .card-head {
-      margin-bottom: 20px;
-    }
-
-    .card-head h2 {
-      font-size: 15px;
-      font-weight: 600;
-      letter-spacing: -0.2px;
       margin-bottom: 3px;
     }
 
-    .card-head p {
+    .header p {
       font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ── Card ───────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .card-head {
+      margin-bottom: 18px;
+    }
+
+    .card-head h2 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+      margin-bottom: 2px;
+    }
+
+    .card-head p {
+      font-size: 12.5px;
       color: var(--muted);
       line-height: 1.5;
     }
 
-    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    /* ── Tabs ───────────────────────────────────────────────────── */
     .tabs {
       display: flex;
       gap: 2px;
-      background: rgba(255,255,255,0.04);
+      background: var(--bg);
+      border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       padding: 3px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .tab {
       flex: 1;
-      padding: 7px 12px;
+      padding: 6px 12px;
       font-size: 13px;
       font-weight: 500;
       font-family: inherit;
       border: none;
-      border-radius: 6px;
+      border-radius: 5px;
       cursor: pointer;
       color: var(--muted);
       background: transparent;
-      transition: background 0.15s, color 0.15s;
+      transition: background 0.12s, color 0.12s;
     }
 
     .tab.active {
-      background: rgba(99,102,241,0.18);
-      color: var(--accent-hi);
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
     }
 
-    /* ── Form ─────────────────────────────────────────────────────────── */
+    /* ── Form ───────────────────────────────────────────────────── */
     .field {
-      margin-bottom: 14px;
+      margin-bottom: 12px;
     }
 
     label {
       display: block;
       font-size: 11.5px;
-      font-weight: 600;
+      font-weight: 500;
       color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 6px;
+      letter-spacing: 0.2px;
+      margin-bottom: 5px;
     }
 
     input[type="email"],
     input[type="password"],
     input[type="text"] {
       width: 100%;
-      background: rgba(255,255,255,0.04);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 10px 13px;
-      font-size: 14px;
+      padding: 9px 12px;
+      font-size: 13.5px;
       font-family: inherit;
       color: var(--text);
       outline: none;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.12s, box-shadow 0.12s;
       -webkit-appearance: none;
     }
 
-    input::placeholder { color: #2d3f55; }
+    input::placeholder { color: #c4bfbb; }
 
     input:focus {
-      border-color: rgba(99,102,241,0.45);
-      background: rgba(99,102,241,0.04);
+      border-color: #a8a29e;
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
     }
 
-    /* ── Buttons ──────────────────────────────────────────────────────── */
+    /* ── Buttons ─────────────────────────────────────────────────── */
     .btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 7px;
       width: 100%;
-      padding: 11px 16px;
-      font-size: 14px;
-      font-weight: 600;
+      padding: 10px 16px;
+      font-size: 13.5px;
+      font-weight: 500;
       font-family: inherit;
       border: none;
       border-radius: var(--radius-sm);
       cursor: pointer;
-      transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+      transition: opacity 0.12s, background 0.12s;
     }
 
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #7c3aed);
-      color: white;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 4px 16px rgba(99,102,241,0.25);
+      background: var(--text);
+      color: #fff;
     }
 
-    .btn-primary:not(:disabled):hover {
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 6px 20px rgba(99,102,241,0.4);
-      transform: translateY(-1px);
-    }
+    .btn-primary:not(:disabled):hover { background: #2c2420; }
 
     .btn-ghost {
-      background: rgba(255,255,255,0.05);
+      background: var(--surface2);
       border: 1px solid var(--border);
       color: var(--text);
     }
 
-    .btn-ghost:not(:disabled):hover {
-      background: rgba(255,255,255,0.08);
-    }
+    .btn-ghost:not(:disabled):hover { background: var(--bg); }
 
-    /* ── Alerts ───────────────────────────────────────────────────────── */
+    /* ── Alerts ──────────────────────────────────────────────────── */
     .alert {
       display: flex;
       align-items: flex-start;
-      gap: 9px;
+      gap: 8px;
       padding: 10px 12px;
       border-radius: var(--radius-sm);
-      font-size: 13px;
+      font-size: 12.5px;
       line-height: 1.5;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .alert-error {
-      background: rgba(239,68,68,0.08);
-      border: 1px solid rgba(239,68,68,0.18);
-      color: #fca5a5;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
     }
 
     .alert-info {
-      background: rgba(99,102,241,0.08);
-      border: 1px solid rgba(99,102,241,0.18);
-      color: #a5b4fc;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: var(--muted);
     }
 
-    /* ── Divider ──────────────────────────────────────────────────────── */
+    /* ── Divider ─────────────────────────────────────────────────── */
     .divider {
       height: 1px;
       background: var(--border);
-      margin: 20px 0;
+      margin: 18px 0;
     }
 
-    /* ── Footer link ──────────────────────────────────────────────────── */
+    /* ── Footer link ─────────────────────────────────────────────── */
     .footer-link {
       text-align: center;
-      margin-top: 14px;
-      font-size: 13px;
+      margin-top: 12px;
+      font-size: 12.5px;
       color: var(--muted);
     }
 
     .footer-link button {
       background: none;
       border: none;
-      color: var(--accent-hi);
-      font-size: 13px;
+      color: var(--text);
+      font-size: 12.5px;
       font-family: inherit;
+      font-weight: 500;
       cursor: pointer;
       padding: 0;
       margin-left: 4px;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
-    .footer-link button:hover { text-decoration: underline; }
-
-    /* ── Step list ────────────────────────────────────────────────────── */
+    /* ── Step list ───────────────────────────────────────────────── */
     .steps {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      margin: 20px 0;
+      margin: 18px 0;
     }
 
     .step {
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 11px;
     }
 
     .step-dot {
       flex-shrink: 0;
-      width: 22px; height: 22px;
+      width: 20px; height: 20px;
       border-radius: 50%;
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-top: 1px;
-      border: 1.5px solid rgba(99,102,241,0.3);
-      background: rgba(99,102,241,0.1);
-      color: var(--accent-hi);
-      transition: all 0.2s;
+      border: 1.5px solid var(--border-hi);
+      background: var(--surface2);
+      color: var(--muted);
     }
 
     .step-dot.done {
-      border-color: rgba(16,185,129,0.4);
-      background: rgba(16,185,129,0.12);
-      color: #34d399;
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+      color: var(--success);
     }
 
     .step-dot.active {
-      border-color: rgba(99,102,241,0.6);
-      background: rgba(99,102,241,0.2);
-      color: var(--accent-hi);
-      box-shadow: 0 0 8px rgba(99,102,241,0.3);
+      border-color: var(--text);
+      background: var(--text);
+      color: #fff;
     }
 
     .step-body h4 {
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       line-height: 1.4;
     }
 
@@ -329,137 +310,134 @@
       margin-top: 1px;
     }
 
-    /* ── VNC open button ──────────────────────────────────────────────── */
+    /* ── VNC button ──────────────────────────────────────────────── */
     .vnc-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 7px;
       width: 100%;
-      padding: 11px 16px;
-      background: linear-gradient(135deg, #6366f1, #7c3aed);
+      padding: 10px 16px;
+      background: var(--text);
       color: white;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: 13.5px;
+      font-weight: 500;
       font-family: inherit;
       border-radius: var(--radius-sm);
       text-decoration: none;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 4px 16px rgba(99,102,241,0.25);
-      transition: box-shadow 0.15s, transform 0.15s;
+      transition: background 0.12s;
       margin-bottom: 10px;
     }
 
-    .vnc-btn:hover {
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 6px 20px rgba(99,102,241,0.4);
-      transform: translateY(-1px);
-    }
+    .vnc-btn:hover { background: #2c2420; }
 
-    /* ── Waiting pill ─────────────────────────────────────────────────── */
+    /* ── Waiting pill ────────────────────────────────────────────── */
     .waiting {
       display: flex;
       align-items: center;
-      gap: 9px;
-      padding: 9px 13px;
-      background: rgba(245,158,11,0.07);
-      border: 1px solid rgba(245,158,11,0.15);
+      gap: 8px;
+      padding: 9px 12px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
       border-radius: var(--radius-sm);
       font-size: 12.5px;
-      color: #fbbf24;
+      color: #92400e;
     }
 
-    /* ── Success ──────────────────────────────────────────────────────── */
+    /* ── Success ─────────────────────────────────────────────────── */
     .success-header {
       text-align: center;
-      padding: 8px 0 20px;
+      padding: 4px 0 18px;
     }
 
     .success-icon {
-      font-size: 36px;
+      font-size: 32px;
       line-height: 1;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .success-header h2 {
-      font-size: 18px;
-      font-weight: 700;
+      font-size: 17px;
+      font-weight: 650;
       letter-spacing: -0.3px;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     .success-header p {
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--muted);
     }
 
-    /* ── MCP URL box ──────────────────────────────────────────────────── */
+    /* ── URL box ─────────────────────────────────────────────────── */
     .url-box {
-      background: rgba(99,102,241,0.06);
-      border: 1px solid rgba(99,102,241,0.15);
+      background: var(--surface2);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px 16px;
+      padding: 13px 15px;
     }
 
     .url-box-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10.5px;
+      font-weight: 500;
       text-transform: uppercase;
-      letter-spacing: 0.7px;
+      letter-spacing: 0.5px;
       color: var(--muted);
-      margin-bottom: 8px;
+      margin-bottom: 7px;
     }
 
     .url-value {
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-      font-size: 12.5px;
-      color: var(--accent-hi);
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--text);
       word-break: break-all;
       line-height: 1.5;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .copy-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: rgba(99,102,241,0.12);
-      border: 1px solid rgba(99,102,241,0.22);
-      border-radius: 6px;
-      color: var(--accent-hi);
-      font-size: 12.5px;
+      gap: 5px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-size: 12px;
       font-weight: 500;
       font-family: inherit;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.12s;
     }
 
-    .copy-btn:hover { background: rgba(99,102,241,0.2); }
+    .copy-btn:hover { background: var(--bg); }
 
     .poke-hint {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(99,102,241,0.1);
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
       font-size: 12px;
-      color: #475569;
+      color: var(--muted);
       line-height: 1.7;
     }
 
-    .poke-hint strong { color: #64748b; }
+    .poke-hint strong { color: var(--text); }
 
     .poke-hint code {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 11.5px;
-      background: rgba(255,255,255,0.05);
-      color: #94a3b8;
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+      background: var(--bg);
+      color: var(--text);
       padding: 1px 5px;
       border-radius: 4px;
+      border: 1px solid var(--border);
     }
 
-    /* ── Spinner ──────────────────────────────────────────────────────── */
+    /* ── Spinner ─────────────────────────────────────────────────── */
     .spin {
       display: inline-block;
-      width: 13px; height: 13px;
-      border: 2px solid rgba(255,255,255,0.2);
+      width: 12px; height: 12px;
+      border: 1.5px solid rgba(0,0,0,0.12);
       border-top-color: currentColor;
       border-radius: 50%;
       animation: spin 0.65s linear infinite;
@@ -515,9 +493,28 @@
 
       <div id="d2lAlertBox" class="hidden"></div>
 
-      <div class="field" style="margin-bottom:20px">
+      <div class="field">
         <label>University D2L host</label>
         <input type="text" id="d2lHost" value="learn.uwaterloo.ca" />
+      </div>
+
+      <!-- Credentials for auto re-login -->
+      <div style="margin-bottom:20px">
+        <button type="button" onclick="toggleCreds()" style="background:none;border:none;color:var(--muted);font-size:12.5px;font-family:inherit;cursor:pointer;padding:4px 0;display:flex;align-items:center;gap:6px">
+          <svg id="credsChevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform 0.15s"><polyline points="9 18 15 12 9 6"/></svg>
+          Save credentials for auto re-login (recommended)
+        </button>
+        <div id="credsFields" class="hidden" style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="field" style="margin-bottom:0">
+            <label>WatIAM username</label>
+            <input type="text" id="d2lUsername" placeholder="watiam" autocomplete="username" />
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Password</label>
+            <input type="password" id="d2lPassword" placeholder="••••••••" autocomplete="current-password" />
+          </div>
+          <p style="font-size:11.5px;color:var(--muted);line-height:1.5">Stored securely. Used only to refresh your session when Duo cookies expire — you'll still need to approve Duo periodically.</p>
+        </div>
       </div>
 
       <button class="btn btn-primary" id="connectBtn" onclick="startD2L()">Open D2L login</button>
@@ -562,7 +559,29 @@
       </div>
     </div>
 
-    <!-- ── Step 3: Success ──────────────────────────────────────────── -->
+    <!-- ── Step 2.5: Piazza ─────────────────────────────────────────── -->
+    <div id="stepPiazza" class="card hidden">
+      <div class="card-head">
+        <h2>Connect Piazza <span style="font-size:12px;color:var(--muted);font-weight:400">(optional)</span></h2>
+        <p>Search and read Piazza posts from your courses.</p>
+      </div>
+
+      <div id="piazzaAlertBox" class="hidden"></div>
+
+      <div class="field">
+        <label>Piazza email</label>
+        <input type="email" id="piazzaEmail" placeholder="you@university.ca" autocomplete="email" />
+      </div>
+      <div class="field" style="margin-bottom:20px">
+        <label>Password</label>
+        <input type="password" id="piazzaPassword" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <button class="btn btn-primary" id="piazzaBtn" onclick="connectPiazza()">Connect Piazza</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="skipPiazza()">Skip for now</button>
+    </div>
+
+    <!-- ── Step 3: Success + Notes ──────────────────────────────────── -->
     <div id="stepSuccess" class="card hidden">
       <div class="success-header">
         <div class="success-icon">🎉</div>
@@ -584,7 +603,7 @@
       </div>
 
       <div class="url-box" style="margin-top:12px">
-        <div class="url-box-label">Bearer Token</div>
+        <div class="url-box-label">Bearer Token (long-lived, auto-renews)</div>
         <div class="url-value" id="bearerToken" style="font-size:11px; opacity:0.6; filter:blur(4px); transition:filter 0.2s; cursor:pointer; user-select:none" onclick="this.style.filter='none'; this.style.opacity='1'; this.style.cursor='text'" title="Click to reveal"></div>
         <button class="copy-btn" onclick="copyField('bearerToken', this)">
           <span class="copy-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
@@ -592,9 +611,35 @@
         </button>
         <div class="poke-hint" style="margin-top:8px; padding-top:8px; border-top: 1px solid rgba(99,102,241,0.1)">
           Click the token to reveal it. Add as request header:<br>
-          <code>Authorization: Bearer &lt;token&gt;</code>
+          <code>Authorization: Bearer &lt;token&gt;</code><br>
+          <span style="color:var(--muted);font-size:11px">This is your refresh token — it auto-renews so you never need to update your config.</span>
         </div>
       </div>
+
+      <div class="divider"></div>
+
+      <!-- Notes upload (persistent) -->
+      <div class="card-head" style="margin-bottom:12px">
+        <h2 style="font-size:14px">Course Notes</h2>
+        <p>Upload PDFs to enable semantic search across your notes.</p>
+      </div>
+
+      <div id="uploadAlertBox" class="hidden" style="margin-bottom:12px"></div>
+
+      <div id="dropZone" onclick="document.getElementById('fileInput').click()"
+        style="border:1.5px dashed var(--border-hi);border-radius:var(--radius);padding:20px;text-align:center;cursor:pointer;transition:border-color 0.15s,background 0.15s"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='rgba(99,102,241,0.05)'"
+        ondragleave="this.style.borderColor='';this.style.background=''"
+        ondrop="handleDrop(event)">
+        <div style="font-size:22px;margin-bottom:6px">📄</div>
+        <div style="font-size:13px;font-weight:500;margin-bottom:3px">Drop PDFs here or click to browse</div>
+        <div style="font-size:11.5px;color:var(--muted)">PDF only · max 50MB per file</div>
+        <input type="file" id="fileInput" accept=".pdf" multiple style="display:none" onchange="handleFiles(this.files)" />
+      </div>
+
+      <div id="uploadQueue" style="margin-top:10px;display:flex;flex-direction:column;gap:6px"></div>
+
+      <div id="notesList" style="margin-top:14px;display:flex;flex-direction:column;gap:6px"></div>
 
       <div class="divider"></div>
 
@@ -607,8 +652,55 @@
     const API = window.location.origin;
     let mode = 'signin';
     let token = null;
+    let refreshToken = null;
+    let tokenExpiresAt = null;
+    let refreshTimer = null;
     let pollInterval = null;
     let sessionId = null;
+
+    // ── Token refresh ──────────────────────────────────────────────────
+    function scheduleTokenRefresh(expiresAt) {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      if (!expiresAt || !refreshToken) return;
+      // Refresh 5 minutes before expiry
+      const msUntilRefresh = (expiresAt * 1000) - Date.now() - (5 * 60 * 1000);
+      if (msUntilRefresh <= 0) { doTokenRefresh(); return; }
+      refreshTimer = setTimeout(doTokenRefresh, msUntilRefresh);
+    }
+
+    async function doTokenRefresh() {
+      if (!refreshToken) return;
+      try {
+        const res = await fetch(`${API}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          token = data.token;
+          refreshToken = data.refreshToken;
+          tokenExpiresAt = data.expiresAt;
+          scheduleTokenRefresh(tokenExpiresAt);
+        }
+      } catch {}
+    }
+
+    function setSession(data) {
+      token = data.token;
+      refreshToken = data.refreshToken;
+      tokenExpiresAt = data.expiresAt;
+      scheduleTokenRefresh(tokenExpiresAt);
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    function showAlert(id, msg, type = 'error') {
+      const box = document.getElementById(id);
+      box.className = `alert alert-${type}`;
+      box.innerHTML = `<span>${type === 'error' ? '⚠' : 'ℹ'}</span> ${msg}`;
+      box.classList.remove('hidden');
+    }
+    function hideAlert(id) { document.getElementById(id).classList.add('hidden'); }
 
     function switchTab(t) {
       mode = t;
@@ -622,17 +714,15 @@
       hideAlert('alertBox');
     }
 
-    function showAlert(id, msg, type = 'error') {
-      const box = document.getElementById(id);
-      box.className = `alert alert-${type}`;
-      box.innerHTML = `<span>${type === 'error' ? '⚠' : 'ℹ'}</span> ${msg}`;
-      box.classList.remove('hidden');
+    function toggleCreds() {
+      const fields = document.getElementById('credsFields');
+      const chevron = document.getElementById('credsChevron');
+      const open = !fields.classList.contains('hidden');
+      fields.classList.toggle('hidden', open);
+      chevron.style.transform = open ? '' : 'rotate(90deg)';
     }
 
-    function hideAlert(id) {
-      document.getElementById(id).classList.add('hidden');
-    }
-
+    // ── Step 1: Auth ───────────────────────────────────────────────────
     async function handleAuth() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
@@ -651,18 +741,15 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Authentication failed.');
-
         if (data.needsConfirmation) {
           showAlert('alertBox', 'Check your email to confirm your account, then sign in.', 'info');
           switchTab('signin');
-          btn.disabled = false;
-          btn.textContent = 'Sign in';
+          btn.disabled = false; btn.textContent = 'Sign in';
           return;
         }
-
         token = data.token;
         if (!token) throw new Error('No token returned — please try again.');
-
+        setSession(data);
         document.getElementById('stepAuth').classList.add('hidden');
         document.getElementById('stepD2L').classList.remove('hidden');
       } catch (e) {
@@ -672,14 +759,26 @@
       }
     }
 
+    // ── Step 2: D2L ────────────────────────────────────────────────────
     async function startD2L() {
       const d2lHost = document.getElementById('d2lHost').value.trim();
+      const username = document.getElementById('d2lUsername').value.trim();
+      const password = document.getElementById('d2lPassword').value;
       const btn = document.getElementById('connectBtn');
       btn.disabled = true;
       btn.innerHTML = '<span class="spin"></span>Starting session…';
       hideAlert('d2lAlertBox');
 
       try {
+        // Save credentials if provided
+        if (username && password) {
+          await fetch(`${API}/api/d2l/save-credentials`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ host: d2lHost, username, password }),
+          });
+        }
+
         const res = await fetch(`${API}/auth/d2l/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -693,7 +792,6 @@
         document.getElementById('vncStep').classList.remove('hidden');
         btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.4"/></svg> Restart session`;
         btn.disabled = false;
-
         pollInterval = setInterval(pollStatus, 2500);
       } catch (e) {
         showAlert('d2lAlertBox', e.message);
@@ -707,14 +805,16 @@
       try {
         const res = await fetch(`${API}/auth/d2l/status/${sessionId}`);
         const data = await res.json();
-
         if (data.status === 'authenticated') {
           clearInterval(pollInterval);
           const d2 = document.getElementById('step2dot');
           const d3 = document.getElementById('step3dot');
           d2.className = 'step-dot done'; d2.textContent = '✓';
           d3.className = 'step-dot done'; d3.textContent = '✓';
-          setTimeout(showSuccess, 700);
+          setTimeout(() => {
+            document.getElementById('stepD2L').classList.add('hidden');
+            document.getElementById('stepPiazza').classList.remove('hidden');
+          }, 700);
         } else if (data.status === 'failed' || data.status === 'no_session') {
           clearInterval(pollInterval);
           showAlert('d2lAlertBox', 'Session expired or failed. Please try again.');
@@ -722,13 +822,137 @@
       } catch {}
     }
 
-    function showSuccess() {
-      document.getElementById('stepD2L').classList.add('hidden');
-      document.getElementById('stepSuccess').classList.remove('hidden');
-      document.getElementById('mcpUrl').textContent = `${API}/mcp`;
-      document.getElementById('bearerToken').textContent = token;
+    // ── Step 2.5: Piazza ───────────────────────────────────────────────
+    async function connectPiazza() {
+      const email = document.getElementById('piazzaEmail').value.trim();
+      const password = document.getElementById('piazzaPassword').value;
+      if (!email || !password) { showAlert('piazzaAlertBox', 'Enter your Piazza email and password.'); return; }
+
+      const btn = document.getElementById('piazzaBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spin"></span>Connecting…';
+      hideAlert('piazzaAlertBox');
+
+      try {
+        const res = await fetch(`${API}/api/piazza/connect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to connect Piazza.');
+        showSuccess();
+      } catch (e) {
+        showAlert('piazzaAlertBox', e.message);
+        btn.disabled = false;
+        btn.textContent = 'Connect Piazza';
+      }
     }
 
+    function skipPiazza() { showSuccess(); }
+
+    // ── Step 3: Success + Notes ────────────────────────────────────────
+    function showSuccess() {
+      document.getElementById('stepPiazza').classList.add('hidden');
+      document.getElementById('stepSuccess').classList.remove('hidden');
+      document.getElementById('mcpUrl').textContent = `${API}/mcp`;
+      // Show refresh token — it's long-lived and the gateway auto-exchanges it.
+      // Access tokens expire in 1hr; refresh tokens stay valid as long as they're used.
+      document.getElementById('bearerToken').textContent = refreshToken || token;
+      loadNotes();
+    }
+
+    // ── Notes upload ───────────────────────────────────────────────────
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('dropZone').style.borderColor = '';
+      document.getElementById('dropZone').style.background = '';
+      handleFiles(e.dataTransfer.files);
+    }
+
+    function handleFiles(files) {
+      [...files].filter(f => f.type === 'application/pdf').forEach(uploadFile);
+    }
+
+    async function uploadFile(file) {
+      const queueEl = document.getElementById('uploadQueue');
+      const itemId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const item = document.createElement('div');
+      item.id = itemId;
+      item.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px';
+      item.innerHTML = `<span class="spin" style="flex-shrink:0"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${file.name}</span><span style="color:var(--muted)">0%</span>`;
+      queueEl.appendChild(item);
+
+      const setStatus = (text, color = 'var(--muted)') => {
+        item.querySelector('span:last-child').textContent = text;
+        item.querySelector('span:last-child').style.color = color;
+      };
+
+      try {
+        // 1. Get presigned URL
+        const presignRes = await fetch(`${API}/api/notes/presign-upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ filename: file.name, contentType: 'application/pdf', size: file.size }),
+        });
+        const { uploadUrl, s3Key } = await presignRes.json();
+        if (!uploadUrl) throw new Error('Failed to get upload URL');
+
+        setStatus('Uploading…');
+
+        // 2. Upload to S3
+        const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': 'application/pdf' } });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+
+        setStatus('Processing…');
+
+        // 3. Trigger embedding
+        await fetch(`${API}/api/notes/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ s3Key, title: file.name.replace(/\.pdf$/i, '') }),
+        });
+
+        item.querySelector('.spin').outerHTML = '<span style="color:#34d399;flex-shrink:0">✓</span>';
+        item.querySelector('.spin') // already replaced above — noop
+        setStatus('Done', '#34d399');
+        setTimeout(() => { item.remove(); loadNotes(); }, 2000);
+      } catch (e) {
+        item.querySelector('span:first-child').textContent = '✕';
+        item.querySelector('span:first-child').style.color = 'var(--danger)';
+        setStatus(e.message || 'Failed', 'var(--danger)');
+      }
+    }
+
+    async function loadNotes() {
+      try {
+        const res = await fetch(`${API}/api/notes`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!res.ok) { showAlert('uploadAlertBox', `Failed to load notes: ${res.status}`); return; }
+        const data = await res.json();
+        const notes = data.notes || data;
+        const el = document.getElementById('notesList');
+        if (!notes?.length) { el.innerHTML = ''; return; }
+        el.innerHTML = notes.map(n => `
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px">
+            <span style="color:var(--accent-hi);flex-shrink:0">📄</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.title}</span>
+            <span style="color:var(--muted);font-size:11px">${n.status === 'ready' ? 'Ready' : n.status}</span>
+            <button onclick="deleteNote('${n.id}', this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0;line-height:1" title="Delete">×</button>
+          </div>`).join('');
+      } catch (e) {
+        showAlert('uploadAlertBox', `Failed to load notes: ${e.message}`);
+      }
+    }
+
+    async function deleteNote(id, btn) {
+      btn.disabled = true;
+      try {
+        await fetch(`${API}/api/notes/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        loadNotes();
+      } catch { btn.disabled = false; }
+    }
+
+    // ── Copy ───────────────────────────────────────────────────────────
     function copyField(id, btn) {
       const text = document.getElementById(id).textContent;
       navigator.clipboard.writeText(text).then(() => {
@@ -743,15 +967,14 @@
       });
     }
 
+    // ── Reset ──────────────────────────────────────────────────────────
     function reset() {
       token = null; sessionId = null;
       if (pollInterval) clearInterval(pollInterval);
+      ['stepD2L','stepPiazza','stepSuccess','vncStep'].forEach(id => document.getElementById(id).classList.add('hidden'));
       document.getElementById('stepAuth').classList.remove('hidden');
-      document.getElementById('stepD2L').classList.add('hidden');
-      document.getElementById('stepSuccess').classList.add('hidden');
-      document.getElementById('vncStep').classList.add('hidden');
-      const btn = document.getElementById('authBtn');
-      btn.disabled = false; btn.textContent = 'Sign in';
+      document.getElementById('authBtn').disabled = false;
+      document.getElementById('authBtn').textContent = 'Sign in';
       switchTab('signin');
     }
 

@@ -140,6 +140,14 @@ export async function authMiddleware(
     return;
   }
 
+  // Trust X-User-Id set by the Go gateway (already verified the JWT)
+  const gatewayUserId = req.headers["x-user-id"] as string | undefined;
+  if (gatewayUserId?.trim()) {
+    req.userId = gatewayUserId.trim();
+    next();
+    return;
+  }
+
   const auth = req.headers["authorization"] || req.headers["Authorization"];
   const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
 

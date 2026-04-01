@@ -1476,6 +1476,30 @@ router.get("/piazza/posts", async (req: Request, res: Response) => {
   }
 });
 
+/** POST /api/d2l/save-credentials — Store D2L username/password for auto re-login */
+router.post("/d2l/save-credentials", async (req: Request, res: Response) => {
+  const userId = req.userId!;
+  const { host, username, password } = req.body || {};
+  if (!username || !password) {
+    res.status(400).json({ error: "username and password required" });
+    return;
+  }
+  try {
+    const { error } = await supabase.from("user_credentials").upsert({
+      user_id: userId,
+      service: "d2l",
+      host: host || process.env.D2L_HOST || "learn.uwaterloo.ca",
+      username,
+      password,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,service" });
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 /** POST /api/piazza/connect — Store Piazza credentials for user */
 router.post("/piazza/connect", async (req: Request, res: Response) => {
   const userId = req.userId!;

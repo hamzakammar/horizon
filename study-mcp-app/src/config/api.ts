@@ -2,19 +2,23 @@ import { supabase } from '../lib/supabase';
 
 const BASE_URL = 'https://api.hamzaammar.ca/api';
 
-async function getAuthHeader(): Promise<string> {
+async function getAuthHeader(forceRefresh = false): Promise<string> {
+  if (forceRefresh) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session?.access_token) throw new Error('Not authenticated');
+    return `Bearer ${data.session.access_token}`;
+  }
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Not authenticated');
   return `Bearer ${session.access_token}`;
 }
 
-async function request<T>(method: string, path: string, body?: any, options?: any): Promise<{ data: T }> {
-  const authHeader = await getAuthHeader();
+async function request<T>(method: string, path: string, body?: any, options?: any, isRetry = false): Promise<{ data: T }> {
+  const authHeader = await getAuthHeader(isRetry);
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
 
   let url = `${BASE_URL}/${cleanPath}`;
 
-  // Handle query params for GET requests
   if (options?.params) {
     const params = new URLSearchParams(options.params);
     url += `?${params.toString()}`;
@@ -29,6 +33,11 @@ async function request<T>(method: string, path: string, body?: any, options?: an
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  // On 401, force-refresh the token and retry once
+  if (response.status === 401 && !isRetry) {
+    return request<T>(method, path, body, options, true);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
