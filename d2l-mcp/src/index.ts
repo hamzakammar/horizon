@@ -31,6 +31,7 @@ import apiRoutes from "./api/routes.js";
 import d2lAuthRoutes from "./api/d2lAuthRoutes.js";
 import publicAuthRoutes from "./api/publicAuthRoutes.js";
 import { BrowserSessionManager } from "./browser/BrowserSessionManager.js";
+import { startSessionRefreshScheduler } from "./jobs/sessionRefresher.js";
 import { fileURLToPath } from "url";
 
 function createServer(): McpServer {
@@ -487,7 +488,7 @@ async function main() {
     const transports: Record<string, StreamableHTTPServerTransport> = {};
     
     // Session persistence
-    const SESSION_FILE = path.join(process.cwd(), '.mcp-sessions.json');
+    const SESSION_FILE = path.join(process.env.SESSIONS_PATH || '/sessions', '.mcp-sessions.json');
     const validSessionIds = new Set<string>();
     
     // Load persisted sessions on startup
@@ -811,6 +812,9 @@ async function main() {
     const httpServer = app.listen(port, () => {
       console.error(`D2L Brightspace MCP server running on HTTP port ${port}`);
       console.error(`Connect to: http://localhost:${port}/mcp`);
+
+      // Start background session refresh scheduler
+      startSessionRefreshScheduler();
     });
 
     // Forward WebSocket upgrade events to the VNC proxy middleware

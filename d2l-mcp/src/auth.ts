@@ -4,6 +4,8 @@ import { homedir } from "os";
 import { join } from "path";
 import { existsSync } from "fs";
 import { supabase } from "./utils/supabase.js";
+import { refreshD2LSession } from "./jobs/sessionRefresher.js";
+import { sendPushToUser } from "./api/push.js";
 
 const REMOTE_DEBUG = process.env.REMOTE_DEBUG === "true";
 
@@ -84,8 +86,6 @@ interface TokenCache {
   expiresAt: number;
 }
 
-let tokenCache: TokenCache = { token: "", expiresAt: 0 };
-
 function isLoginPage(url: string): boolean {
   return (
     url.includes("login") ||
@@ -112,12 +112,28 @@ export async function getToken(userId?: string): Promise<string> {
       const maxAge = 20 * 60 * 60 * 1000; // 20 hours
       
       if (tokenAge > maxAge) {
-        console.error(`[AUTH] Stored token for user ${userId} is too old (${Math.round(tokenAge / 3600000)}h), will refresh`);
-        // In production, throw REAUTH_REQUIRED instead of attempting automated login
+        console.error(`[AUTH] Stored token for user ${userId} is too old (${Math.round(tokenAge / 3600000)}h), attempting auto-refresh`);
         if (isProduction) {
+          // Attempt headless refresh before giving up
+          const refreshResult = await refreshD2LSession(userId);
+          if (refreshResult.success) {
+            // Re-read the freshly stored token
+            const freshToken = await getD2LToken(userId);
+            if (freshToken?.token) {
+              console.error(`[AUTH] Auto-refresh succeeded for user ${userId}`);
+              userTokenCache[cacheKey] = {
+                token: freshToken.token,
+                expiresAt: Date.now() + 82800000,
+              };
+              return freshToken.token;
+            }
+          }
+          // Refresh failed — notify user and throw
+          console.error(`[AUTH] Auto-refresh failed for user ${userId}: ${refreshResult.reason}`);
+          sendPushToUser(userId, "D2L Session Expired", "Please re-authenticate to continue using Horizon.", { type: "reauth_required" }).catch(() => {});
           throw new Error("REAUTH_REQUIRED");
         }
-        // Don't use cached token, continue to refresh
+        // Non-production: don't use cached token, continue to refresh
       } else {
         console.error(`[AUTH] Using stored token for user ${userId} (age: ${Math.round(tokenAge / 3600000)}h)`);
         userTokenCache[cacheKey] = {
@@ -128,9 +144,23 @@ export async function getToken(userId?: string): Promise<string> {
       }
     }
 
-    // In production, if no valid token exists, throw REAUTH_REQUIRED instead of attempting login
+    // In production, if no valid token exists, attempt auto-refresh before failing
     if (isProduction) {
-      console.error(`[AUTH] Production mode: No valid token found for user ${userId}, throwing REAUTH_REQUIRED`);
+      console.error(`[AUTH] Production mode: No valid token for user ${userId}, attempting auto-refresh`);
+      const refreshResult = await refreshD2LSession(userId);
+      if (refreshResult.success) {
+        const freshToken = await getD2LToken(userId);
+        if (freshToken?.token) {
+          console.error(`[AUTH] Auto-refresh succeeded for user ${userId}`);
+          userTokenCache[cacheKey] = {
+            token: freshToken.token,
+            expiresAt: Date.now() + 82800000,
+          };
+          return freshToken.token;
+        }
+      }
+      console.error(`[AUTH] Auto-refresh failed for user ${userId}: ${refreshResult.reason}`);
+      sendPushToUser(userId, "D2L Session Expired", "Please re-authenticate to continue using Horizon.", { type: "reauth_required" }).catch(() => {});
       throw new Error("REAUTH_REQUIRED");
     }
 

@@ -3,29 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Horizon MCP</title>
+  <title>Horizon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0a0a0f;
-      --surface:   #111118;
-      --border:    rgba(255,255,255,0.07);
-      --border-hi: rgba(255,255,255,0.12);
-      --text:      #f1f5f9;
-      --muted:     #64748b;
-      --subtle:    #1e293b;
-      --accent:    #6366f1;
-      --accent-hi: #818cf8;
-      --accent-glow: rgba(99,102,241,0.25);
-      --success:   #10b981;
-      --warn:      #f59e0b;
-      --danger:    #ef4444;
-      --radius:    12px;
-      --radius-sm: 8px;
+      --bg: #fafafa;
+      --surface: #fff;
+      --border: #e5e5e5;
+      --border-focus: #a0a0a0;
+      --text: #111;
+      --text-secondary: #666;
+      --text-tertiary: #999;
+      --accent: #111;
+      --accent-hover: #333;
+      --success: #1a7f37;
+      --success-bg: #dafbe1;
+      --warn: #9a6700;
+      --warn-bg: #fff8c5;
+      --danger: #cf222e;
+      --danger-bg: #ffebe9;
+      --radius: 8px;
     }
 
     body {
@@ -40,61 +41,36 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Background gradient */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99,102,241,0.08) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
     .wrap {
       width: 100%;
-      max-width: 400px;
-      position: relative;
-      z-index: 1;
+      max-width: 380px;
     }
 
-    /* ── Header ───────────────────────────────────────────────────────── */
+    /* ── Header ──────────────────────────────────────── */
     .header {
       text-align: center;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
     }
 
-    .logo {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 48px; height: 48px;
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      border-radius: 14px;
+    .wordmark {
       font-size: 22px;
-      margin-bottom: 16px;
-      box-shadow: 0 0 0 1px rgba(99,102,241,0.3), 0 8px 24px rgba(99,102,241,0.2);
-    }
-
-    .header h1 {
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: -0.4px;
+      font-weight: 600;
+      letter-spacing: -0.5px;
       color: var(--text);
       margin-bottom: 4px;
     }
 
     .header p {
-      font-size: 13.5px;
-      color: var(--muted);
-      line-height: 1.5;
+      font-size: 14px;
+      color: var(--text-secondary);
     }
 
-    /* ── Card ─────────────────────────────────────────────────────────── */
+    /* ── Card ─────────────────────────────────────────── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 28px;
+      border-radius: 12px;
+      padding: 24px;
     }
 
     .card-head {
@@ -104,365 +80,352 @@
     .card-head h2 {
       font-size: 15px;
       font-weight: 600;
-      letter-spacing: -0.2px;
-      margin-bottom: 3px;
+      margin-bottom: 4px;
     }
 
     .card-head p {
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text-secondary);
       line-height: 1.5;
     }
 
-    /* ── Tabs ─────────────────────────────────────────────────────────── */
+    /* ── Tabs ──────────────────────────────────────────── */
     .tabs {
       display: flex;
-      gap: 2px;
-      background: rgba(255,255,255,0.04);
-      border-radius: var(--radius-sm);
-      padding: 3px;
-      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
     }
 
     .tab {
       flex: 1;
-      padding: 7px 12px;
+      padding: 8px 0;
       font-size: 13px;
       font-weight: 500;
       font-family: inherit;
       border: none;
-      border-radius: 6px;
+      border-bottom: 2px solid transparent;
       cursor: pointer;
-      color: var(--muted);
+      color: var(--text-tertiary);
       background: transparent;
-      transition: background 0.15s, color 0.15s;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
     }
 
     .tab.active {
-      background: rgba(99,102,241,0.18);
-      color: var(--accent-hi);
+      color: var(--text);
+      border-bottom-color: var(--text);
     }
 
-    /* ── Form ─────────────────────────────────────────────────────────── */
+    .tab:hover:not(.active) {
+      color: var(--text-secondary);
+    }
+
+    /* ── Form ──────────────────────────────────────────── */
     .field {
       margin-bottom: 14px;
     }
 
     label {
       display: block;
-      font-size: 11.5px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 5px;
     }
 
     input[type="email"],
     input[type="password"],
     input[type="text"] {
       width: 100%;
-      background: rgba(255,255,255,0.04);
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px 13px;
+      border-radius: 6px;
+      padding: 8px 10px;
       font-size: 14px;
       font-family: inherit;
       color: var(--text);
       outline: none;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.15s;
       -webkit-appearance: none;
     }
 
-    input::placeholder { color: #2d3f55; }
+    input::placeholder { color: #bbb; }
 
     input:focus {
-      border-color: rgba(99,102,241,0.45);
-      background: rgba(99,102,241,0.04);
+      border-color: var(--border-focus);
     }
 
-    /* ── Buttons ──────────────────────────────────────────────────────── */
+    /* ── Buttons ───────────────────────────────────────── */
     .btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
-      padding: 11px 16px;
+      padding: 9px 14px;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
       font-family: inherit;
       border: none;
-      border-radius: var(--radius-sm);
+      border-radius: 6px;
       cursor: pointer;
-      transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+      transition: background 0.15s;
     }
 
-    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .btn-primary {
-      background: linear-gradient(135deg, #6366f1, #7c3aed);
-      color: white;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 4px 16px rgba(99,102,241,0.25);
+      background: var(--accent);
+      color: #fff;
     }
 
     .btn-primary:not(:disabled):hover {
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 6px 20px rgba(99,102,241,0.4);
-      transform: translateY(-1px);
+      background: var(--accent-hover);
     }
 
-    .btn-ghost {
-      background: rgba(255,255,255,0.05);
+    .btn-secondary {
+      background: transparent;
       border: 1px solid var(--border);
       color: var(--text);
     }
 
-    .btn-ghost:not(:disabled):hover {
-      background: rgba(255,255,255,0.08);
+    .btn-secondary:not(:disabled):hover {
+      background: #f5f5f5;
     }
 
-    /* ── Alerts ───────────────────────────────────────────────────────── */
+    /* ── Alerts ────────────────────────────────────────── */
     .alert {
-      display: flex;
-      align-items: flex-start;
-      gap: 9px;
-      padding: 10px 12px;
-      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      border-radius: 6px;
       font-size: 13px;
       line-height: 1.5;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
 
     .alert-error {
-      background: rgba(239,68,68,0.08);
-      border: 1px solid rgba(239,68,68,0.18);
-      color: #fca5a5;
+      background: var(--danger-bg);
+      color: var(--danger);
     }
 
     .alert-info {
-      background: rgba(99,102,241,0.08);
-      border: 1px solid rgba(99,102,241,0.18);
-      color: #a5b4fc;
+      background: var(--warn-bg);
+      color: var(--warn);
     }
 
-    /* ── Divider ──────────────────────────────────────────────────────── */
+    /* ── Divider ───────────────────────────────────────── */
     .divider {
       height: 1px;
       background: var(--border);
       margin: 20px 0;
     }
 
-    /* ── Footer link ──────────────────────────────────────────────────── */
+    /* ── Footer ────────────────────────────────────────── */
     .footer-link {
       text-align: center;
-      margin-top: 14px;
+      margin-top: 16px;
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text-secondary);
     }
 
     .footer-link button {
       background: none;
       border: none;
-      color: var(--accent-hi);
+      color: var(--text);
       font-size: 13px;
+      font-weight: 500;
       font-family: inherit;
       cursor: pointer;
       padding: 0;
-      margin-left: 4px;
+      margin-left: 2px;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
 
-    .footer-link button:hover { text-decoration: underline; }
-
-    /* ── Step list ────────────────────────────────────────────────────── */
+    /* ── Steps ─────────────────────────────────────────── */
     .steps {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       margin: 20px 0;
     }
 
     .step {
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 10px;
     }
 
     .step-dot {
       flex-shrink: 0;
-      width: 22px; height: 22px;
+      width: 20px; height: 20px;
       border-radius: 50%;
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-top: 1px;
-      border: 1.5px solid rgba(99,102,241,0.3);
-      background: rgba(99,102,241,0.1);
-      color: var(--accent-hi);
-      transition: all 0.2s;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--text-tertiary);
     }
 
     .step-dot.done {
-      border-color: rgba(16,185,129,0.4);
-      background: rgba(16,185,129,0.12);
-      color: #34d399;
+      border-color: var(--success);
+      background: var(--success-bg);
+      color: var(--success);
     }
 
     .step-dot.active {
-      border-color: rgba(99,102,241,0.6);
-      background: rgba(99,102,241,0.2);
-      color: var(--accent-hi);
-      box-shadow: 0 0 8px rgba(99,102,241,0.3);
+      border-color: var(--text);
+      background: var(--surface);
+      color: var(--text);
     }
 
     .step-body h4 {
       font-size: 13px;
-      font-weight: 600;
-      line-height: 1.4;
+      font-weight: 500;
     }
 
     .step-body p {
       font-size: 12px;
-      color: var(--muted);
+      color: var(--text-secondary);
       line-height: 1.5;
       margin-top: 1px;
     }
 
-    /* ── VNC open button ──────────────────────────────────────────────── */
+    /* ── VNC button ────────────────────────────────────── */
     .vnc-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
       width: 100%;
-      padding: 11px 16px;
-      background: linear-gradient(135deg, #6366f1, #7c3aed);
-      color: white;
+      padding: 9px 14px;
+      background: var(--accent);
+      color: #fff;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
       font-family: inherit;
-      border-radius: var(--radius-sm);
+      border-radius: 6px;
       text-decoration: none;
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 4px 16px rgba(99,102,241,0.25);
-      transition: box-shadow 0.15s, transform 0.15s;
+      transition: background 0.15s;
       margin-bottom: 10px;
     }
 
-    .vnc-btn:hover {
-      box-shadow: 0 1px 0 rgba(255,255,255,0.1) inset, 0 6px 20px rgba(99,102,241,0.4);
-      transform: translateY(-1px);
-    }
+    .vnc-btn:hover { background: var(--accent-hover); }
 
-    /* ── Waiting pill ─────────────────────────────────────────────────── */
+    /* ── Waiting ───────────────────────────────────────── */
     .waiting {
       display: flex;
       align-items: center;
-      gap: 9px;
-      padding: 9px 13px;
-      background: rgba(245,158,11,0.07);
-      border: 1px solid rgba(245,158,11,0.15);
-      border-radius: var(--radius-sm);
-      font-size: 12.5px;
-      color: #fbbf24;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--warn-bg);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--warn);
     }
 
-    /* ── Success ──────────────────────────────────────────────────────── */
+    /* ── Success ───────────────────────────────────────── */
     .success-header {
       text-align: center;
-      padding: 8px 0 20px;
+      padding: 4px 0 20px;
     }
 
-    .success-icon {
-      font-size: 36px;
-      line-height: 1;
+    .success-check {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--success-bg);
+      color: var(--success);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 12px;
     }
 
     .success-header h2 {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
+      font-size: 16px;
+      font-weight: 600;
       margin-bottom: 4px;
     }
 
     .success-header p {
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text-secondary);
     }
 
-    /* ── MCP URL box ──────────────────────────────────────────────────── */
+    /* ── URL box ───────────────────────────────────────── */
     .url-box {
-      background: rgba(99,102,241,0.06);
-      border: 1px solid rgba(99,102,241,0.15);
+      background: var(--bg);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px 16px;
+      padding: 12px 14px;
     }
+
+    .url-box + .url-box { margin-top: 10px; }
 
     .url-box-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.7px;
-      color: var(--muted);
-      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
     }
 
     .url-value {
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-      font-size: 12.5px;
-      color: var(--accent-hi);
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+      font-size: 12px;
+      color: var(--text);
       word-break: break-all;
       line-height: 1.5;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .copy-btn {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: rgba(99,102,241,0.12);
-      border: 1px solid rgba(99,102,241,0.22);
-      border-radius: 6px;
-      color: var(--accent-hi);
-      font-size: 12.5px;
+      gap: 4px;
+      padding: 4px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-secondary);
+      font-size: 12px;
       font-weight: 500;
       font-family: inherit;
       cursor: pointer;
       transition: background 0.15s;
     }
 
-    .copy-btn:hover { background: rgba(99,102,241,0.2); }
+    .copy-btn:hover { background: #f0f0f0; }
 
-    .poke-hint {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid rgba(99,102,241,0.1);
+    .config-hint {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
       font-size: 12px;
-      color: #475569;
-      line-height: 1.7;
+      color: var(--text-tertiary);
+      line-height: 1.6;
     }
 
-    .poke-hint strong { color: #64748b; }
-
-    .poke-hint code {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 11.5px;
-      background: rgba(255,255,255,0.05);
-      color: #94a3b8;
-      padding: 1px 5px;
-      border-radius: 4px;
+    .config-hint code {
+      font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+      font-size: 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 1px 4px;
+      border-radius: 3px;
     }
 
-    /* ── Spinner ──────────────────────────────────────────────────────── */
+    /* ── Spinner ───────────────────────────────────────── */
     .spin {
       display: inline-block;
-      width: 13px; height: 13px;
-      border: 2px solid rgba(255,255,255,0.2);
+      width: 12px; height: 12px;
+      border: 1.5px solid #e5e5e5;
       border-top-color: currentColor;
       border-radius: 50%;
-      animation: spin 0.65s linear infinite;
+      animation: spin 0.6s linear infinite;
       flex-shrink: 0;
     }
 
@@ -475,12 +438,11 @@
   <div class="wrap">
 
     <div class="header">
-      <div class="logo">⚡</div>
-      <h1>Horizon MCP</h1>
-      <p>AI-powered access to your D2L courses</p>
+      <div class="wordmark">Horizon</div>
+      <p>Connect your D2L account</p>
     </div>
 
-    <!-- ── Step 1: Auth ─────────────────────────────────────────────── -->
+    <!-- Step 1: Auth -->
     <div id="stepAuth" class="card">
       <div class="tabs">
         <button class="tab active" id="tabSignin" onclick="switchTab('signin')">Sign in</button>
@@ -491,114 +453,115 @@
 
       <div class="field">
         <label>Email</label>
-        <input type="email" id="email" placeholder="you@university.ca" autocomplete="email" />
+        <input type="email" id="email" placeholder="you@uwaterloo.ca" autocomplete="email" />
       </div>
-      <div class="field" style="margin-bottom:20px">
+      <div class="field" style="margin-bottom:18px">
         <label>Password</label>
-        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
       </div>
 
       <button class="btn btn-primary" id="authBtn" onclick="handleAuth()">Sign in</button>
 
       <div class="footer-link">
-        <span id="switchText">Don't have an account?</span>
+        <span id="switchText">No account?</span>
         <button id="switchBtn" onclick="switchTab('signup')">Create one</button>
       </div>
     </div>
 
-    <!-- ── Step 2: D2L ──────────────────────────────────────────────── -->
+    <!-- Step 2: D2L -->
     <div id="stepD2L" class="card hidden">
       <div class="card-head">
         <h2>Connect D2L</h2>
-        <p>Log in to your university portal to complete setup.</p>
+        <p>Log in to your university portal to link your account.</p>
       </div>
 
       <div id="d2lAlertBox" class="hidden"></div>
 
-      <div class="field" style="margin-bottom:20px">
-        <label>University D2L host</label>
+      <div class="field" style="margin-bottom:18px">
+        <label>D2L host</label>
         <input type="text" id="d2lHost" value="learn.uwaterloo.ca" />
       </div>
 
-      <button class="btn btn-primary" id="connectBtn" onclick="startD2L()">Open D2L login</button>
+      <button class="btn btn-primary" id="connectBtn" onclick="startD2L()">Start D2L login</button>
 
-      <!-- Progress shown after session starts -->
       <div id="vncStep" class="hidden">
         <div class="divider"></div>
 
         <div class="steps">
           <div class="step">
-            <div class="step-dot done">✓</div>
+            <div class="step-dot done">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
             <div class="step-body">
               <h4>Session started</h4>
-              <p>A secure browser has been opened for you.</p>
+              <p>Secure browser opened for you.</p>
             </div>
           </div>
           <div class="step">
             <div class="step-dot active" id="step2dot">2</div>
             <div class="step-body">
               <h4>Log in to D2L</h4>
-              <p>Use your university credentials and approve Duo on your phone.</p>
+              <p>Use your university credentials. Approve Duo on your phone.</p>
             </div>
           </div>
           <div class="step">
             <div class="step-dot" id="step3dot">3</div>
             <div class="step-body">
               <h4>Session captured</h4>
-              <p>We'll detect your login automatically — no extra steps needed.</p>
+              <p>Login detected automatically.</p>
             </div>
           </div>
         </div>
 
         <a id="vncLink" href="#" target="_blank" class="vnc-btn">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
           Open login browser
         </a>
 
         <div class="waiting">
-          <span class="spin" style="border-top-color:#fbbf24; border-color:rgba(251,191,36,0.2)"></span>
-          Waiting for you to log in…
+          <span class="spin" style="border-top-color:#9a6700; border-color:#e5e5e5"></span>
+          Waiting for login...
         </div>
       </div>
     </div>
 
-    <!-- ── Step 3: Success ──────────────────────────────────────────── -->
+    <!-- Step 3: Success -->
     <div id="stepSuccess" class="card hidden">
       <div class="success-header">
-        <div class="success-icon">🎉</div>
-        <h2>You're all set</h2>
-        <p>D2L connected. Add the URL below to your MCP client.</p>
+        <div class="success-check">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2>Connected</h2>
+        <p>Add this server to your MCP client.</p>
       </div>
 
       <div class="url-box">
         <div class="url-box-label">MCP Server URL</div>
         <div class="url-value" id="mcpUrl"></div>
         <button class="copy-btn" onclick="copyField('mcpUrl', this)">
-          <span class="copy-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
-          <span class="copy-label">Copy URL</span>
+          <span class="copy-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="copy-label">Copy</span>
         </button>
-        <div class="poke-hint">
-          In Poke: <strong>Settings → MCP Servers → Add</strong><br>
-          Paste the URL above, then add the token below as a request header.
+        <div class="config-hint">
+          In Claude Desktop or Poke, add this as a remote MCP server.
         </div>
       </div>
 
-      <div class="url-box" style="margin-top:12px">
-        <div class="url-box-label">Bearer Token</div>
-        <div class="url-value" id="bearerToken" style="font-size:11px; opacity:0.6; filter:blur(4px); transition:filter 0.2s; cursor:pointer; user-select:none" onclick="this.style.filter='none'; this.style.opacity='1'; this.style.cursor='text'" title="Click to reveal"></div>
+      <div class="url-box">
+        <div class="url-box-label">Bearer token</div>
+        <div class="url-value" id="bearerToken" style="font-size:11px; filter:blur(3px); cursor:pointer; user-select:none" onclick="this.style.filter='none'; this.style.cursor='text'; this.style.userSelect='auto'" title="Click to reveal"></div>
         <button class="copy-btn" onclick="copyField('bearerToken', this)">
-          <span class="copy-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
-          <span class="copy-label">Copy token</span>
+          <span class="copy-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="copy-label">Copy</span>
         </button>
-        <div class="poke-hint" style="margin-top:8px; padding-top:8px; border-top: 1px solid rgba(99,102,241,0.1)">
-          Click the token to reveal it. Add as request header:<br>
-          <code>Authorization: Bearer &lt;token&gt;</code>
+        <div class="config-hint">
+          Add as header: <code>Authorization: Bearer &lt;token&gt;</code>
         </div>
       </div>
 
       <div class="divider"></div>
 
-      <button class="btn btn-ghost" onclick="reset()">Connect another account</button>
+      <button class="btn btn-secondary" onclick="reset()">Connect another account</button>
     </div>
 
   </div>
@@ -615,7 +578,7 @@
       document.getElementById('tabSignin').classList.toggle('active', t === 'signin');
       document.getElementById('tabSignup').classList.toggle('active', t === 'signup');
       document.getElementById('authBtn').textContent = t === 'signin' ? 'Sign in' : 'Create account';
-      document.getElementById('switchText').textContent = t === 'signin' ? "Don't have an account?" : 'Already have an account?';
+      document.getElementById('switchText').textContent = t === 'signin' ? 'No account?' : 'Have an account?';
       const switchBtn = document.getElementById('switchBtn');
       switchBtn.textContent = t === 'signin' ? 'Create one' : 'Sign in';
       switchBtn.onclick = () => switchTab(t === 'signin' ? 'signup' : 'signin');
@@ -625,7 +588,7 @@
     function showAlert(id, msg, type = 'error') {
       const box = document.getElementById(id);
       box.className = `alert alert-${type}`;
-      box.innerHTML = `<span>${type === 'error' ? '⚠' : 'ℹ'}</span> ${msg}`;
+      box.textContent = msg;
       box.classList.remove('hidden');
     }
 
@@ -636,11 +599,11 @@
     async function handleAuth() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-      if (!email || !password) { showAlert('alertBox', 'Please enter your email and password.'); return; }
+      if (!email || !password) { showAlert('alertBox', 'Enter your email and password.'); return; }
 
       const btn = document.getElementById('authBtn');
       btn.disabled = true;
-      btn.innerHTML = `<span class="spin"></span>${mode === 'signin' ? 'Signing in…' : 'Creating account…'}`;
+      btn.innerHTML = `<span class="spin"></span>${mode === 'signin' ? 'Signing in...' : 'Creating account...'}`;
       hideAlert('alertBox');
 
       try {
@@ -661,7 +624,7 @@
         }
 
         token = data.token;
-        if (!token) throw new Error('No token returned — please try again.');
+        if (!token) throw new Error('No token returned.');
 
         document.getElementById('stepAuth').classList.add('hidden');
         document.getElementById('stepD2L').classList.remove('hidden');
@@ -676,7 +639,7 @@
       const d2lHost = document.getElementById('d2lHost').value.trim();
       const btn = document.getElementById('connectBtn');
       btn.disabled = true;
-      btn.innerHTML = '<span class="spin"></span>Starting session…';
+      btn.innerHTML = '<span class="spin"></span>Starting...';
       hideAlert('d2lAlertBox');
 
       try {
@@ -691,14 +654,14 @@
         sessionId = data.sessionId;
         document.getElementById('vncLink').href = data.vncUrl;
         document.getElementById('vncStep').classList.remove('hidden');
-        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.4"/></svg> Restart session`;
+        btn.textContent = 'Restart session';
         btn.disabled = false;
 
         pollInterval = setInterval(pollStatus, 2500);
       } catch (e) {
         showAlert('d2lAlertBox', e.message);
         btn.disabled = false;
-        btn.textContent = 'Open D2L login';
+        btn.textContent = 'Start D2L login';
       }
     }
 
@@ -712,12 +675,14 @@
           clearInterval(pollInterval);
           const d2 = document.getElementById('step2dot');
           const d3 = document.getElementById('step3dot');
-          d2.className = 'step-dot done'; d2.textContent = '✓';
-          d3.className = 'step-dot done'; d3.textContent = '✓';
-          setTimeout(showSuccess, 700);
+          d2.className = 'step-dot done';
+          d2.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          d3.className = 'step-dot done';
+          d3.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          setTimeout(showSuccess, 600);
         } else if (data.status === 'failed' || data.status === 'no_session') {
           clearInterval(pollInterval);
-          showAlert('d2lAlertBox', 'Session expired or failed. Please try again.');
+          showAlert('d2lAlertBox', 'Session expired or failed. Try again.');
         }
       } catch {}
     }
@@ -732,14 +697,10 @@
     function copyField(id, btn) {
       const text = document.getElementById(id).textContent;
       navigator.clipboard.writeText(text).then(() => {
-        const icon = btn.querySelector('.copy-icon');
         const label = btn.querySelector('.copy-label');
-        icon.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-        label.textContent = 'Copied!';
-        setTimeout(() => {
-          icon.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-          label.textContent = id === 'mcpUrl' ? 'Copy URL' : 'Copy token';
-        }, 2000);
+        const prev = label.textContent;
+        label.textContent = 'Copied';
+        setTimeout(() => { label.textContent = prev; }, 1500);
       });
     }
 

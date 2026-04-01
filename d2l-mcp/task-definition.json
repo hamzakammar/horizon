@@ -80,7 +80,7 @@
         },
         {
           "name": "SESSIONS_PATH",
-          "value": "/tmp/sessions"
+          "value": "/sessions"
         },
         {
           "name": "API_HOST",
@@ -125,6 +125,13 @@
           "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-jwt-secret-kXQTMN"
         }
       ],
+      "mountPoints": [
+        {
+          "sourceVolume": "sessions-efs",
+          "containerPath": "/sessions",
+          "readOnly": false
+        }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
@@ -134,6 +141,16 @@
         }
       },
       "essential": true
+    }
+  ],
+  "volumes": [
+    {
+      "name": "sessions-efs",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-061308a40f3ad0355",
+        "rootDirectory": "/",
+        "transitEncryption": "ENABLED"
+      }
     }
   ]
 }

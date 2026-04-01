@@ -189,7 +189,8 @@ router.post("/notes/process", async (req: Request, res: Response) => {
     await supabase
       .from("notes")
       .update({ status: "ready", page_count: pageCount })
-      .eq("id", note.id);
+      .eq("id", note.id)
+      .eq("user_id", userId);
 
     res.json({
       noteId: note.id,
@@ -497,11 +498,9 @@ router.post("/d2l/connect-and-sync", async (req: Request, res: Response) => {
       return;
     }
 
-    // Clear both caches so next request picks up fresh cookies from DB
+    // Clear token cache so next request picks up fresh cookies from DB
     const { clearTokenCache } = await import("../auth.js");
-    const { clearSessionCache } = await import("../auth-valence.js");
     clearTokenCache(userId);
-    clearSessionCache(userId);
 
     // 2. Ingest pre-fetched assignment data (app fetched this on-device)
     let totalAdded = 0;
@@ -1302,8 +1301,15 @@ router.get("/d2l/courses/:courseId/file", async (req: Request, res: Response) =>
     const fullUrl = fileUrl.startsWith("http") ? fileUrl : `https://${creds.host}${fileUrl}`;
 
     // Fetch with session cookies
-    const { getSessionCookies } = await import("../auth-valence.js");
-    const cookieHeader = await getSessionCookies(userId);
+    const { getToken } = await import("../auth.js");
+    const token = await getToken(userId);
+    let cookieHeader = token;
+    try {
+      const parsed = JSON.parse(token);
+      if (parsed.d2lSessionVal && parsed.d2lSecureSessionVal) {
+        cookieHeader = `d2lSessionVal=${parsed.d2lSessionVal}; d2lSecureSessionVal=${parsed.d2lSecureSessionVal}`;
+      }
+    } catch {}
 
     const fetchResp = await fetch(fullUrl, {
       headers: { Cookie: cookieHeader },
@@ -1368,8 +1374,15 @@ router.post("/d2l/courses/:courseId/file/save", async (req: Request, res: Respon
 
     const fullUrl = fileUrl.startsWith("http") ? fileUrl : `https://${creds.host}${fileUrl}`;
 
-    const { getSessionCookies } = await import("../auth-valence.js");
-    const cookieHeader = await getSessionCookies(userId);
+    const { getToken } = await import("../auth.js");
+    const token2 = await getToken(userId);
+    let cookieHeader = token2;
+    try {
+      const parsed = JSON.parse(token2);
+      if (parsed.d2lSessionVal && parsed.d2lSecureSessionVal) {
+        cookieHeader = `d2lSessionVal=${parsed.d2lSessionVal}; d2lSecureSessionVal=${parsed.d2lSecureSessionVal}`;
+      }
+    } catch {}
 
     // Download PDF buffer
     console.error(`[API] Downloading D2L file: ${fullUrl}`);
@@ -1423,7 +1436,7 @@ router.post("/d2l/courses/:courseId/file/save", async (req: Request, res: Respon
       url: s3Url,
     });
 
-    await supabase.from("notes").update({ status: "ready", page_count: pageCount }).eq("id", note.id);
+    await supabase.from("notes").update({ status: "ready", page_count: pageCount }).eq("id", note.id).eq("user_id", userId);
 
     res.json({ noteId: note.id, status: "ready", chunkCount, pageCount, s3Key });
   } catch (e: any) {
