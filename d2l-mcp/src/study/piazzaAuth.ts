@@ -205,17 +205,27 @@ export async function getPiazzaCookieHeader(userId?: string): Promise<string> {
   const isProduction = process.env.NODE_ENV === "production" || process.env.AWS_EXECUTION_ENV !== undefined || !process.env.DISPLAY;
   
   // First, try to get cookies from database (WebView login)
+  // Use direct REST API — Supabase JS client has known issues in ECS
   if (userId) {
     try {
-      const { data, error } = await supabase
-        .from("user_credentials")
-        .select("token")
-        .eq("user_id", userId)
-        .eq("service", "piazza")
-        .single();
-      
-      if (!error && data?.token) {
-        const cookieHeader = data.token;
+      const sbUrl = process.env.SUPABASE_URL;
+      const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+      let cookieHeader: string | null = null;
+
+      if (sbUrl && sbKey) {
+        const restUrl = `${sbUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.piazza&select=token&limit=1`;
+        const restResp = await fetch(restUrl, {
+          headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+        });
+        if (restResp.ok) {
+          const rows = await restResp.json() as Array<{ token: string }>;
+          if (rows.length > 0 && rows[0].token) {
+            cookieHeader = rows[0].token;
+          }
+        }
+      }
+
+      if (cookieHeader) {
         // Validate cookies before returning (check for session_id and test API call)
         if (cookieHeader.includes("session_id=")) {
           // Test cookie validity by making a lightweight API call
@@ -233,40 +243,19 @@ export async function getPiazzaCookieHeader(userId?: string): Promise<string> {
             const responseText = await testResponse.text();
             // If we get HTML, cookies are invalid
             if (responseText.trim().startsWith("<!DOCTYPE html") || responseText.trim().startsWith("<html")) {
-              console.error("[PIAZZA_AUTH] Stored cookies are invalid (got HTML response), deleting from DB");
-              // Delete invalid cookies from DB
-              await supabase
-                .from("user_credentials")
-                .delete()
-                .eq("user_id", userId)
-                .eq("service", "piazza");
+              console.error("[PIAZZA_AUTH] Stored cookies are invalid (got HTML response)");
             } else if (testResponse.ok) {
               // Cookies are valid
               console.error("[PIAZZA_AUTH] Using validated cookies from database");
               return cookieHeader;
             } else {
-              console.error("[PIAZZA_AUTH] Cookie validation failed with status:", testResponse.status, "Deleting from DB");
-              await supabase
-                .from("user_credentials")
-                .delete()
-                .eq("user_id", userId)
-                .eq("service", "piazza");
+              console.error("[PIAZZA_AUTH] Cookie validation failed with status:", testResponse.status);
             }
           } catch (validationError) {
-            console.error("[PIAZZA_AUTH] Cookie validation error:", validationError, "Deleting from DB");
-            await supabase
-              .from("user_credentials")
-              .delete()
-              .eq("user_id", userId)
-              .eq("service", "piazza");
+            console.error("[PIAZZA_AUTH] Cookie validation error:", validationError);
           }
         } else {
-          console.error("[PIAZZA_AUTH] Stored cookies missing session_id, deleting from DB");
-          await supabase
-            .from("user_credentials")
-            .delete()
-            .eq("user_id", userId)
-            .eq("service", "piazza");
+          console.error("[PIAZZA_AUTH] Stored cookies missing session_id");
         }
       }
     } catch (e) {

@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -117,6 +119,51 @@ func exchangeRefreshToken(refreshToken string) (*supabaseSession, error) {
 	return &session, nil
 }
 
+// resolveAPIKey hashes the API key and looks it up in the api_keys table via Supabase REST API.
+func resolveAPIKey(apiKey string) (string, error) {
+	// SHA-256 hash the key
+	hash := sha256.Sum256([]byte(apiKey))
+	keyHash := hex.EncodeToString(hash[:])
+
+	sbURL := getSupabaseURL()
+	// Use service role key for api_keys lookup (bypasses RLS)
+	sbKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if sbKey == "" {
+		sbKey = getAnonKey()
+	}
+	if sbURL == "" || sbKey == "" {
+		return "", fmt.Errorf("missing Supabase config for API key validation")
+	}
+
+	// Query api_keys table
+	restURL := fmt.Sprintf("%s/rest/v1/api_keys?key_hash=eq.%s&select=user_id&limit=1", sbURL, keyHash)
+	req, err := http.NewRequest("GET", restURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("apikey", sbKey)
+	req.Header.Set("Authorization", "Bearer "+sbKey)
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("api_keys lookup failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("api_keys lookup returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var rows []struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil || len(rows) == 0 {
+		return "", fmt.Errorf("API key not found")
+	}
+	return rows[0].UserID, nil
+}
+
 // isLikelyRefreshToken returns true if the token looks like a Supabase refresh token
 // (short alphanumeric string, not a JWT which always contains dots).
 func isLikelyRefreshToken(token string) bool {
@@ -134,7 +181,26 @@ func Auth(_ string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Check for API key auth (x-api-key header or Bearer hzn_ prefix)
+			apiKey := r.Header.Get("x-api-key")
 			authHeader := r.Header.Get("Authorization")
+			if apiKey == "" && authHeader != "" && strings.HasPrefix(authHeader, "Bearer hzn_") {
+				apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+			if apiKey != "" && strings.HasPrefix(apiKey, "hzn_") {
+				// Resolve API key to userId via Supabase
+				resolvedUserID, apiErr := resolveAPIKey(apiKey)
+				if apiErr != nil {
+					fmt.Printf("[AUTH] API key validation failed: %v\n", apiErr)
+					http.Error(w, `{"error":"invalid API key"}`, http.StatusUnauthorized)
+					return
+				}
+				fmt.Printf("[AUTH] API key auth OK, userId=%s\n", resolvedUserID)
+				ctx := context.WithValue(r.Context(), UserIDKey, resolvedUserID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
 				return

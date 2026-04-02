@@ -44,6 +44,10 @@
         {
           "name": "SUPABASE_ANON_KEY",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-anon-key-4NVXCo"
+        },
+        {
+          "name": "SUPABASE_SERVICE_ROLE_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:051140201449:secret:study-mcp/supabase-key-RHCXal"
         }
       ],
       "logConfiguration": {

@@ -1485,15 +1485,24 @@ router.post("/d2l/save-credentials", async (req: Request, res: Response) => {
     return;
   }
   try {
-    const { error } = await supabase.from("user_credentials").upsert({
-      user_id: userId,
-      service: "d2l",
-      host: host || process.env.D2L_HOST || "learn.uwaterloo.ca",
-      username,
-      password,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,service" });
-    if (error) throw error;
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (!sbUrl || !sbKey) throw new Error("Missing Supabase config");
+    const resp = await fetch(`${sbUrl}/rest/v1/user_credentials`, {
+      method: "POST",
+      headers: {
+        "apikey": sbKey, "Authorization": `Bearer ${sbKey}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({
+        user_id: userId, service: "d2l",
+        host: host || process.env.D2L_HOST || "learn.uwaterloo.ca",
+        username, password,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });

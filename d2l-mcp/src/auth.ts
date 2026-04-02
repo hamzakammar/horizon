@@ -104,9 +104,15 @@ const userTokenCache: Record<string, TokenCache> = {};
  */
 async function markDuoRequired(userId: string): Promise<void> {
   try {
-    await supabase.from("user_credentials").update({
-      duo_required_at: new Date().toISOString(),
-    }).eq("user_id", userId).eq("service", "d2l");
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey) {
+      await fetch(`${sbUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.d2l`, {
+        method: "PATCH",
+        headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ duo_required_at: new Date().toISOString() }),
+      });
+    }
     console.error(`[AUTH] Marked Duo required for user ${userId}`);
   } catch (e) {
     console.error(`[AUTH] Failed to mark Duo required for user ${userId}:`, e);
@@ -118,10 +124,15 @@ async function markDuoRequired(userId: string): Promise<void> {
  */
 export async function clearDuoRequired(userId: string): Promise<void> {
   try {
-    await supabase.from("user_credentials").update({
-      duo_required_at: null,
-      notification_sent_at: null,
-    }).eq("user_id", userId).eq("service", "d2l");
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey) {
+      await fetch(`${sbUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.d2l`, {
+        method: "PATCH",
+        headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ duo_required_at: null, notification_sent_at: null }),
+      });
+    }
   } catch {}
 }
 
@@ -130,13 +141,15 @@ export async function clearDuoRequired(userId: string): Promise<void> {
  */
 export async function isDuoRequired(userId: string): Promise<boolean> {
   try {
-    const { data } = await supabase
-      .from("user_credentials")
-      .select("duo_required_at")
-      .eq("user_id", userId)
-      .eq("service", "d2l")
-      .single();
-    return !!data?.duo_required_at;
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (!sbUrl || !sbKey) return false;
+    const resp = await fetch(`${sbUrl}/rest/v1/user_credentials?user_id=eq.${userId}&service=eq.d2l&select=duo_required_at&limit=1`, {
+      headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+    });
+    if (!resp.ok) return false;
+    const rows = await resp.json() as Array<{ duo_required_at: string | null }>;
+    return rows.length > 0 && !!rows[0].duo_required_at;
   } catch {
     return false;
   }
@@ -214,16 +227,24 @@ async function attemptSilentRelogin(userId: string): Promise<string | null> {
 
     const token = JSON.stringify({ d2lSessionVal: sessionVal, d2lSecureSessionVal: secureVal });
 
-    // Persist new token
-    await supabase.from("user_credentials").upsert({
-      user_id: userId,
-      service: "d2l",
-      host: creds.host,
-      token,
-      duo_required_at: null,
-      notification_sent_at: null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,service" });
+    // Persist new token via REST API
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (sbUrl && sbKey) {
+      await fetch(`${sbUrl}/rest/v1/user_credentials`, {
+        method: "POST",
+        headers: {
+          "apikey": sbKey, "Authorization": `Bearer ${sbKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "resolution=merge-duplicates",
+        },
+        body: JSON.stringify({
+          user_id: userId, service: "d2l", host: creds.host, token,
+          duo_required_at: null, notification_sent_at: null,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    }
 
     userTokenCache[userId] = { token, expiresAt: Date.now() + 82800000 };
     console.error(`[AUTH] Silent re-login succeeded for user ${userId}`);

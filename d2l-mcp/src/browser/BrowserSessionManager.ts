@@ -306,19 +306,42 @@ export class BrowserSessionManager {
       await fs.unlink(tmpStatePath).catch(() => {});
 
       // Store D2L session token in Supabase for MCP tool use
+      // Use direct REST API — Supabase JS client has known issues in ECS
       const token = JSON.stringify({ d2lSessionVal: sessionVal, d2lSecureSessionVal: secureVal });
-      const { error } = await supabase.from("user_credentials").upsert({
-        user_id: userId,
-        service: "d2l",
-        host: d2lHost,
-        token,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id,service" });
+      const sbUrl = process.env.SUPABASE_URL;
+      const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
-      if (error) {
-        console.error(`[VNC] Failed to store credentials in Supabase for user ${userId}:`, error.message);
+      if (sbUrl && sbKey) {
+        try {
+          // Upsert via REST API with Prefer: resolution=merge-duplicates
+          const restUrl = `${sbUrl}/rest/v1/user_credentials`;
+          const upsertResp = await fetch(restUrl, {
+            method: "POST",
+            headers: {
+              "apikey": sbKey,
+              "Authorization": `Bearer ${sbKey}`,
+              "Content-Type": "application/json",
+              "Prefer": "resolution=merge-duplicates",
+            },
+            body: JSON.stringify({
+              user_id: userId,
+              service: "d2l",
+              host: d2lHost,
+              token,
+              updated_at: new Date().toISOString(),
+            }),
+          });
+          if (!upsertResp.ok) {
+            const errText = await upsertResp.text();
+            console.error(`[VNC] Failed to store credentials via REST for user ${userId}: ${upsertResp.status} ${errText}`);
+          } else {
+            console.error(`[VNC] Successfully stored D2L credentials for user ${userId}`);
+          }
+        } catch (restErr: any) {
+          console.error(`[VNC] REST API error storing credentials for user ${userId}:`, restErr.message);
+        }
       } else {
-        console.error(`[VNC] Successfully stored D2L credentials for user ${userId}`);
+        console.error(`[VNC] Missing SUPABASE_URL or key — cannot store D2L credentials`);
       }
 
       session.status = "authenticated";
