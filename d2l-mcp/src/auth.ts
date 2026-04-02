@@ -282,6 +282,8 @@ export async function getToken(userId?: string): Promise<string> {
         throw new Error("REAUTH_REQUIRED");
       } else {
         console.error(`[AUTH] Using stored token for user ${userId} (age: ${Math.round(tokenAge / 3600000)}h)`);
+        // Clear duo_required flag if it was set — token is valid now
+        clearDuoRequired(userId).catch(() => {});
         userTokenCache[cacheKey] = {
           token: userToken.token,
           expiresAt: Date.now() + 82800000,

@@ -24,6 +24,7 @@ import fs from "fs/promises";
 import os from "os";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { supabase } from "../utils/supabase.js";
+import { clearDuoRequired } from "../auth.js";
 
 const SESSIONS_BASE = process.env.SESSIONS_PATH || "/tmp/sessions";
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
@@ -378,6 +379,9 @@ export class BrowserSessionManager {
       }
 
       session.status = "authenticated";
+
+      // Clear the duo_required flag since we just successfully re-authed
+      await clearDuoRequired(userId).catch(() => {});
 
       // Close after 3s so user can see the logged-in state
       setTimeout(() => BrowserSessionManager.closeSession(sessionId), 3000);
