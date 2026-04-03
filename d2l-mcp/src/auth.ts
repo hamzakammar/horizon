@@ -438,6 +438,7 @@ export async function getToken(userId?: string): Promise<string> {
       const retryBrowserStartTime = Date.now();
       context = await chromium.launchPersistentContext(sessionPath, {
         headless: false,
+        executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium",
         viewport: { width: 1280, height: 720 },
         args: browserArgs.length > 0 ? browserArgs : undefined,
       });
@@ -1033,8 +1034,10 @@ export async function getAuthenticatedContext(userId?: string): Promise<BrowserC
   // In production, always use headless mode
   const headlessMode = isProductionEnv || hasExistingSession;
 
+  const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium";
   let context = await chromium.launchPersistentContext(sessionPath, {
     headless: headlessMode,
+    executablePath: chromiumPath,
     viewport: { width: 1280, height: 720 },
   });
 
@@ -1222,6 +1225,7 @@ export async function getAuthenticatedContext(userId?: string): Promise<BrowserC
           console.error("Session expired, opening browser for login...");
           context = await chromium.launchPersistentContext(sessionPath, {
             headless: false,
+            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium",
             viewport: { width: 1280, height: 720 },
           });
           const newPage = await context.newPage();

@@ -608,7 +608,7 @@ async function main() {
               delete transports[sid];
             }
           };
-          
+
           // Connect server to transport
           const server = createServer();
           await server.connect(transport);
