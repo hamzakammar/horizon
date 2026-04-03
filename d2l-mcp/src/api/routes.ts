@@ -235,24 +235,22 @@ router.post("/notes/process", async (req: Request, res: Response) => {
 router.get("/notes", async (req: Request, res: Response) => {
   const userId = req.userId!;
   const courseId = req.query.courseId as string | undefined;
-
-  let query = supabase
-    .from("notes")
-    .select("id, title, course_id, created_at, page_count, status, s3_key")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  if (courseId) query = query.eq("course_id", courseId);
-
-  const { data: notes, error } = await query;
-
-  if (error) {
-    console.error("[API] notes list error:", error);
+  try {
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (!sbUrl || !sbKey) throw new Error("Missing Supabase config");
+    let url = `${sbUrl}/rest/v1/notes?user_id=eq.${userId}&select=id,title,course_id,created_at,page_count,status,s3_key&order=created_at.desc`;
+    if (courseId) url += `&course_id=eq.${courseId}`;
+    const resp = await fetch(url, {
+      headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const notes = await resp.json();
+    res.json({ notes: notes ?? [] });
+  } catch (e: any) {
+    console.error("[API] notes list error:", e);
     res.status(500).json({ error: "Failed to list notes" });
-    return;
   }
-
-  res.json({ notes: notes ?? [] });
 });
 
 /** GET /api/notes/:id/view — get a presigned URL to view a note's PDF */
@@ -260,14 +258,16 @@ router.get("/notes/:id/view", async (req: Request, res: Response) => {
   const userId = req.userId!;
   const noteId = req.params.id;
   try {
-    const { data, error } = await supabase
-      .from("notes")
-      .select("s3_key")
-      .eq("user_id", userId)
-      .eq("id", noteId)
-      .limit(1);
-    const note = Array.isArray(data) ? data[0] : data;
-    if (error || !note?.s3_key) {
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (!sbUrl || !sbKey) throw new Error("Missing Supabase config");
+    const resp = await fetch(`${sbUrl}/rest/v1/notes?user_id=eq.${userId}&id=eq.${noteId}&select=s3_key&limit=1`, {
+      headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const rows = await resp.json();
+    const note = Array.isArray(rows) ? rows[0] : rows;
+    if (!note?.s3_key) {
       res.status(404).json({ error: "Note not found" });
       return;
     }
@@ -290,34 +290,34 @@ router.delete("/notes/:id", async (req: Request, res: Response) => {
 
   try {
     console.info("[API] Deleting note and sections:", { userId, noteId });
+    const sbUrl = process.env.SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+    if (!sbUrl || !sbKey) throw new Error("Missing Supabase config");
+    const headers = { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` };
 
     // First delete note_sections for this note/user
-    const { error: sectionsError } = await supabase
-      .from("note_sections")
-      .delete()
-      .eq("user_id", userId)
-      .eq("note_id", noteId);
-
-    if (sectionsError) {
-      console.error("[API] notes delete - note_sections error:", sectionsError);
-      res.status(500).json({ error: "Failed to delete note sections", details: sectionsError.message });
+    const secResp = await fetch(`${sbUrl}/rest/v1/note_sections?user_id=eq.${userId}&note_id=eq.${noteId}`, {
+      method: "DELETE", headers,
+    });
+    if (!secResp.ok) {
+      const msg = await secResp.text();
+      console.error("[API] notes delete - note_sections error:", msg);
+      res.status(500).json({ error: "Failed to delete note sections", details: msg });
       return;
     }
 
     // Then delete the note itself
-    const { data: deletedNotes, error: notesError } = await supabase
-      .from("notes")
-      .delete()
-      .eq("user_id", userId)
-      .eq("id", noteId)
-      .select("id");
-
-    if (notesError) {
-      console.error("[API] notes delete - notes error:", notesError);
-      res.status(500).json({ error: "Failed to delete note", details: notesError.message });
+    const noteResp = await fetch(`${sbUrl}/rest/v1/notes?user_id=eq.${userId}&id=eq.${noteId}`, {
+      method: "DELETE", headers: { ...headers, "Prefer": "return=representation" },
+    });
+    if (!noteResp.ok) {
+      const msg = await noteResp.text();
+      console.error("[API] notes delete - notes error:", msg);
+      res.status(500).json({ error: "Failed to delete note", details: msg });
       return;
     }
 
+    const deletedNotes = await noteResp.json();
     if (!deletedNotes || deletedNotes.length === 0) {
       res.status(404).json({ error: "Note not found" });
       return;
