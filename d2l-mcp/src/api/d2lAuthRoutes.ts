@@ -24,10 +24,6 @@ function resolvePublicHost(req: Request): string {
   const host = forwardedHost || hostHeader || reqHost || process.env.API_HOST || "localhost";
   const normalized = host.split(",")[0].trim().replace(/:\d+$/, "");
 
-  // Temporary guard: horizon host has mixed DNS delegation in production.
-  if (normalized === "horizon.hamzaammar.ca") {
-    return "api.hamzaammar.ca";
-  }
   return normalized;
 }
 
