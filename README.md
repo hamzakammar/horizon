@@ -6,9 +6,9 @@ An MCP server that connects AI assistants to your university's D2L Brightspace a
 
 ## Hosted version
 
-The easiest way to use Horizon is the hosted instance at **https://horizon.hamzaammar.ca**:
+The easiest way to use Horizon is the hosted instance at **https://horizon.hamzaammar.ca/onboard**:
 
-1. Go to https://horizon.hamzaammar.ca and create an account
+1. Go to https://horizon.hamzaammar.ca/onboard and create an account
 2. Connect your D2L account via the browser login flow (Duo MFA supported)
 3. Optionally connect Piazza
 4. Copy your API key and MCP server URL from the dashboard
