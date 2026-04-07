@@ -18,6 +18,7 @@ import { calendarTools } from "./tools/calendar.js";
 import { newsTools } from "./tools/news.js";
 import { enrollmentTools } from "./tools/enrollments.js";
 import { downloadFile, readFile, deleteFile } from "./tools/files.js";
+import { startSessionRefreshScheduler } from "./jobs/sessionRefresher.js";
 import { piazzaTools } from "./tools/piazza.js";
 import { PlanningTools } from "./study/src/planning.js";
 import { NotesTools } from "./study/src/notes.js";
@@ -865,40 +866,9 @@ async function main() {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
 
-    // Daily D2L session health check — attempts silent re-login for all users,
-    // marks duo_required if it hits the Duo wall. Users see a warning on next tool call.
-    const runDailyHealthCheck = async () => {
-      console.error("[HEALTH] Running daily D2L session check");
-      try {
-        const { data: users } = await (await import("./utils/supabase.js")).supabase
-          .from("user_credentials")
-          .select("user_id, token, updated_at")
-          .eq("service", "d2l");
-
-        if (!users?.length) return;
-
-        for (const u of users) {
-          const tokenAge = Date.now() - new Date(u.updated_at || 0).getTime();
-          const maxAge = 20 * 60 * 60 * 1000; // 20 hours
-          if (tokenAge > maxAge) {
-            console.error(`[HEALTH] Token stale for user ${u.user_id}, attempting silent re-login`);
-            // getToken handles silent re-login + markDuoRequired internally
-            const { getToken } = await import("./auth.js");
-            await getToken(u.user_id).catch(() => {
-              console.error(`[HEALTH] Silent re-login failed for user ${u.user_id} — Duo required, user will see warning on next tool call`);
-            });
-          }
-        }
-      } catch (e) {
-        console.error("[HEALTH] Daily check error:", e);
-      }
-    };
-
-    // Run once at startup (after 5min delay), then every 24h
-    setTimeout(() => {
-      runDailyHealthCheck();
-      setInterval(runDailyHealthCheck, 24 * 60 * 60 * 1000);
-    }, 5 * 60 * 1000);
+    // Session refresh scheduler — headless cookie refresh every 30min,
+    // with credential-based fallback when ADFS state expires.
+    startSessionRefreshScheduler();
   } else {
     console.error(
       `Invalid MCP_TRANSPORT value: ${transportType}. Must be 'stdio', 'http', or 'https'`
