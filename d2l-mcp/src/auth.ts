@@ -19,7 +19,7 @@ function getSessionPath(userId?: string): string {
 }
 
 // Load D2L token for a user from database
-async function getD2LToken(userId?: string): Promise<{ host: string; token: string; updated_at?: string } | null> {
+export async function getD2LToken(userId?: string): Promise<{ host: string; token: string; updated_at?: string } | null> {
   if (!userId) return null;
   try {
     const sbUrl = process.env.SUPABASE_URL;

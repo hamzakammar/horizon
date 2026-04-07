@@ -4,10 +4,9 @@ import * as os from 'os';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
-import { getAuthenticatedContext } from '../auth.js';
+import { getAuthenticatedContext, getD2LToken } from '../auth.js';
+import { getUserId } from '../utils/userContext.js';
 import mammoth from 'mammoth';
-
-const D2L_HOST = process.env.D2L_HOST || 'learn.ul.ie';
 
 // Extract text content from various file types
 async function extractContent(data: Buffer, ext: string): Promise<string | null> {
@@ -145,89 +144,140 @@ async function extractContent(data: Buffer, ext: string): Promise<string | null>
   return null;
 }
 
-export async function downloadFile(url: string, savePath?: string) {
-  // Ensure full URL
-  const fullUrl = url.startsWith('http') ? url : `https://${D2L_HOST}${url}`;
-  
-  // Extract filename from URL
-  const urlPath = new URL(fullUrl).pathname;
-  const pathParts = urlPath.split('/');
-  const urlFilename = decodeURIComponent(pathParts[pathParts.length - 1] || 'download');
+const extToMime: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.zip': 'application/zip',
+  '.txt': 'text/plain',
+  '.html': 'text/html',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+};
 
-  // Get authenticated browser context (handles SSO login if needed)
-  const browser = await getAuthenticatedContext();
+function saveBuffer(data: Buffer, filename: string, downloadsDir: string, savePath?: string): string {
+  // Ensure the target directory exists
+  const targetDir = savePath && !fs.existsSync(savePath) ? path.dirname(savePath) : downloadsDir;
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  let finalPath = savePath && fs.existsSync(savePath) && !fs.statSync(savePath).isDirectory()
+    ? savePath
+    : path.join(downloadsDir, filename);
+
+  let counter = 1;
+  const ext = path.extname(finalPath);
+  const base = path.basename(finalPath, ext);
+  const dirPath = path.dirname(finalPath);
+  while (fs.existsSync(finalPath)) {
+    finalPath = path.join(dirPath, `${base} (${counter})${ext}`);
+    counter++;
+  }
+
+  fs.writeFileSync(finalPath, data);
+  return finalPath;
+}
+
+export async function downloadFile(url: string, savePath?: string) {
+  const userId = getUserId();
+
+  // Resolve host and session token for this user
+  const d2lTokenData = await getD2LToken(userId);
+  const d2lHost = d2lTokenData?.host || process.env.D2L_HOST || 'learn.ul.ie';
+
+  const fullUrl = url.startsWith('http') ? url : `https://${d2lHost}${url}`;
+  const urlPath = new URL(fullUrl).pathname;
+  const urlFilename = decodeURIComponent(urlPath.split('/').pop() || 'download');
+
+  const downloadsDir = savePath && fs.existsSync(savePath) && fs.statSync(savePath).isDirectory()
+    ? savePath
+    : path.join(os.homedir(), 'Downloads');
+
+  // Strategy 0: Direct HTTP fetch using D2L session cookies — no browser needed
+  if (d2lTokenData?.token) {
+    try {
+      let cookieHeader = '';
+      try {
+        const parsed = JSON.parse(d2lTokenData.token);
+        if (parsed.d2lSessionVal && parsed.d2lSecureSessionVal) {
+          cookieHeader = `d2lSessionVal=${parsed.d2lSessionVal}; d2lSecureSessionVal=${parsed.d2lSecureSessionVal}`;
+        }
+      } catch { /* not a cookie token */ }
+
+      if (cookieHeader) {
+        console.error(`[DOWNLOAD] Direct fetch: ${fullUrl}`);
+        const response = await fetch(fullUrl, {
+          headers: { Cookie: cookieHeader },
+          redirect: 'follow',
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        console.error(`[DOWNLOAD] Direct fetch status: ${response.status}, content-type: ${contentType}`);
+
+        if (response.ok && !contentType.includes('text/html')) {
+          const data = Buffer.from(await response.arrayBuffer());
+
+          const contentDisposition = response.headers.get('content-disposition') || '';
+          let filename = urlFilename;
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+          if (filenameMatch) filename = filenameMatch[1].replace(/['"]/g, '').trim();
+
+          const finalPath = saveBuffer(data, filename, downloadsDir, savePath);
+          console.error(`[DOWNLOAD] File saved: ${finalPath} (${(data.length / 1024).toFixed(1)} KB)`);
+
+          const ext = path.extname(finalPath).toLowerCase();
+          const finalContentType = contentType.includes('octet-stream') ? (extToMime[ext] || contentType) : contentType;
+          const textContent = await extractContent(data, ext);
+
+          return {
+            path: finalPath,
+            filename: path.basename(finalPath),
+            size: data.length,
+            contentType: finalContentType,
+            content: textContent,
+          };
+        }
+
+        if (!response.ok) {
+          console.error(`[DOWNLOAD] Direct fetch got ${response.status} — falling back to browser`);
+        } else {
+          console.error(`[DOWNLOAD] Direct fetch returned HTML — session may be expired, falling back to browser`);
+        }
+      }
+    } catch (fetchErr: any) {
+      console.error(`[DOWNLOAD] Direct fetch error: ${fetchErr?.message} — falling back to browser`);
+    }
+  }
+
+  // Fallback: browser-based download (handles complex auth/redirect flows)
+  const browser = await getAuthenticatedContext(userId);
 
   try {
     const page = await browser.newPage();
-    
-    // Set up download handling
-    const downloadsDir = savePath && fs.existsSync(savePath) && fs.statSync(savePath).isDirectory()
-      ? savePath
-      : path.join(os.homedir(), 'Downloads');
-    
-    // Set download path
-    const context = page.context();
-    await context.setExtraHTTPHeaders({});
-    
-    // Navigate to the file page and capture response
-    console.error(`[DOWNLOAD] Navigating to: ${fullUrl}`);
+
+    console.error(`[DOWNLOAD] Browser navigating to: ${fullUrl}`);
     const navResponse = await page.goto(fullUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // Check if the navigation itself was a direct file download (non-HTML response)
     const navContentType = navResponse?.headers()['content-type'] || '';
     if (navResponse && navResponse.ok() && !navContentType.includes('text/html')) {
-      console.error(`[DOWNLOAD] URL is direct file download (content-type: ${navContentType})`);
       const data = await navResponse.body();
 
-      // Extract filename from content-disposition or use URL filename
       const contentDisposition = navResponse.headers()['content-disposition'] || '';
       let filename = urlFilename;
       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-      if (filenameMatch) {
-        filename = filenameMatch[1].replace(/['"]/g, '');
-      }
+      if (filenameMatch) filename = filenameMatch[1].replace(/['"]/g, '');
 
-      // Save file
-      let finalPath = savePath && fs.existsSync(savePath) && !fs.statSync(savePath).isDirectory()
-        ? savePath
-        : path.join(downloadsDir, filename);
+      const finalPath = saveBuffer(Buffer.from(data), filename, downloadsDir, savePath);
+      console.error(`[DOWNLOAD] Browser: file saved: ${finalPath} (${(data.length / 1024).toFixed(1)} KB)`);
 
-      // Handle filename collisions
-      let counter = 1;
-      const ext = path.extname(finalPath);
-      const base = path.basename(finalPath, ext);
-      const dirPath = path.dirname(finalPath);
-
-      while (fs.existsSync(finalPath)) {
-        finalPath = path.join(dirPath, `${base} (${counter})${ext}`);
-        counter++;
-      }
-
-      fs.writeFileSync(finalPath, data);
-      console.error(`[DOWNLOAD] File saved successfully: ${finalPath} (${(data.length / 1024).toFixed(1)} KB)`);
-
-      const extToMime: Record<string, string> = {
-        '.pdf': 'application/pdf',
-        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        '.doc': 'application/msword',
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        '.xls': 'application/vnd.ms-excel',
-        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        '.ppt': 'application/vnd.ms-powerpoint',
-        '.zip': 'application/zip',
-        '.txt': 'text/plain',
-        '.html': 'text/html',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.png': 'image/png',
-        '.gif': 'image/gif',
-      };
-
-      const finalContentType = navContentType.includes('octet-stream')
-        ? (extToMime[ext.toLowerCase()] || navContentType)
-        : navContentType;
-
-      const textContent = await extractContent(data, ext);
+      const ext = path.extname(finalPath).toLowerCase();
+      const finalContentType = navContentType.includes('octet-stream') ? (extToMime[ext] || navContentType) : navContentType;
+      const textContent = await extractContent(Buffer.from(data), ext);
 
       return {
         path: finalPath,
@@ -238,119 +288,67 @@ export async function downloadFile(url: string, savePath?: string) {
       };
     }
 
-    // If we got an HTML page, wait a bit for it to fully load
+    // HTML page — look for a download button/link
     await page.waitForTimeout(2000);
 
-    // Try multiple strategies to trigger download
-    let downloadPromise: Promise<any> | null = null;
-    let downloadPath: string | null = null;
-
-    // Strategy 1: Look for download button/link
     const downloadSelectors = [
-      'a[download]', // Direct download link
-      'a:has-text("Download")', // Link with "Download" text
-      'button:has-text("Download")', // Button with "Download" text
-      '[data-download]', // Element with download data attribute
-      'a.download', // Link with download class
-      'button.download', // Button with download class
-      'a[href*="download"]', // Link with download in href
-      'a[href*="ViewFile"]', // D2L specific view file link
-      'a[href*="FileDownload"]', // D2L specific download link
+      'a[download]',
+      'a:has-text("Download")',
+      'button:has-text("Download")',
+      '[data-download]',
+      'a.download',
+      'button.download',
+      'a[href*="download"]',
+      'a[href*="ViewFile"]',
+      'a[href*="FileDownload"]',
     ];
-    
-    // Set up download listener before clicking
-    downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-    
-    let clicked = false;
+
+    const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
+
     for (const selector of downloadSelectors) {
       try {
         const element = await page.locator(selector).first();
         if (await element.isVisible({ timeout: 2000 })) {
-          console.error(`[DOWNLOAD] Found download element with selector: ${selector}`);
+          console.error(`[DOWNLOAD] Found download element: ${selector}`);
           await element.click();
-          clicked = true;
           break;
         }
-      } catch (e) {
-        // Continue to next selector
-      }
+      } catch { /* try next selector */ }
     }
-    
-    // If no download button found, we already checked for direct downloads above
-    // Nothing more to do here
-    
-    // Wait for download to complete
-    if (downloadPromise) {
-      try {
-        const download = await downloadPromise;
-        if (download) {
-          console.error(`[DOWNLOAD] Download started, saving file...`);
-          
-          // Determine save path
-          let finalPath: string;
-          if (savePath && fs.existsSync(savePath) && !fs.statSync(savePath).isDirectory()) {
-            finalPath = savePath;
-          } else {
-            const suggestedFilename = download.suggestedFilename() || urlFilename;
-            finalPath = path.join(downloadsDir, suggestedFilename);
-            
-            // Handle filename collisions
-            let counter = 1;
-            const ext = path.extname(finalPath);
-            const base = path.basename(finalPath, ext);
-            const dirPath = path.dirname(finalPath);
-            
-            while (fs.existsSync(finalPath)) {
-              finalPath = path.join(dirPath, `${base} (${counter})${ext}`);
-              counter++;
-            }
-          }
-          
-          // Save the download
-          await download.saveAs(finalPath);
-          downloadPath = finalPath;
-          console.error(`[DOWNLOAD] File saved successfully: ${finalPath}`);
-          
-          // Read the file
-          const data = fs.readFileSync(finalPath);
-          const ext = path.extname(finalPath);
-          
-          const extToMime: Record<string, string> = {
-            '.pdf': 'application/pdf',
-            '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            '.doc': 'application/msword',
-            '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            '.xls': 'application/vnd.ms-excel',
-            '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            '.ppt': 'application/vnd.ms-powerpoint',
-            '.zip': 'application/zip',
-            '.txt': 'text/plain',
-            '.html': 'text/html',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-          };
-          
-          const contentType = extToMime[ext.toLowerCase()] || 'application/octet-stream';
-          const textContent = await extractContent(data, ext);
-          
-          return {
-            path: finalPath,
-            filename: path.basename(finalPath),
-            size: data.length,
-            contentType,
-            content: textContent,
-          };
-        }
-      } catch (downloadError: any) {
-        console.error(`[DOWNLOAD] Download failed: ${downloadError?.message || downloadError}`);
+
+    const download = await downloadPromise;
+    if (download) {
+      const suggestedFilename = download.suggestedFilename() || urlFilename;
+      let finalPath = path.join(downloadsDir, suggestedFilename);
+
+      let counter = 1;
+      const ext = path.extname(finalPath);
+      const base = path.basename(finalPath, ext);
+      const dirPath = path.dirname(finalPath);
+      while (fs.existsSync(finalPath)) {
+        finalPath = path.join(dirPath, `${base} (${counter})${ext}`);
+        counter++;
       }
+
+      await download.saveAs(finalPath);
+      console.error(`[DOWNLOAD] Browser download saved: ${finalPath}`);
+
+      const data = fs.readFileSync(finalPath);
+      const fileExt = path.extname(finalPath).toLowerCase();
+      const contentType = extToMime[fileExt] || 'application/octet-stream';
+      const textContent = await extractContent(data, fileExt);
+
+      return {
+        path: finalPath,
+        filename: path.basename(finalPath),
+        size: data.length,
+        contentType,
+        content: textContent,
+      };
     }
-    
-    // If download didn't trigger, throw error
+
     throw new Error('Could not trigger file download. The page may not have a download button, or the file may require manual download.');
-    
+
   } finally {
     await browser.close();
   }
