@@ -1,6 +1,6 @@
 # Horizon
 
-An MCP server that connects AI assistants to your university's D2L Brightspace and Piazza. Sign up once at **[horizon.hamzaammar.ca](https://horizon.hamzaammar.ca)**, then use Claude, ChatGPT, or any MCP-compatible client to query your courses, grades, assignments, deadlines, files, and Piazza posts — all from your AI assistant.
+An MCP server that connects AI assistants to your university's D2L Brightspace and Piazza. Sign up once at **[horizon.hamzaammar.ca/onboard](https://horizon.hamzaammar.ca/onboard)**, then use Claude, ChatGPT, or any MCP-compatible client to query your courses, grades, assignments, deadlines, files, and Piazza posts — all from your AI assistant.
 
 > Horizon is a tool for organizing and accessing your own academic data. Use in accordance with your institution's academic integrity policies.
 
