@@ -282,9 +282,9 @@ export async function getToken(userId?: string): Promise<string> {
   if (userId) {
     const userToken = await getD2LToken(userId);
     if (userToken && userToken.token) {
-      // Check if token is already aged (older than 20 hours)
+      // Check if token is already aged (older than 14 hours — scheduler refreshes at 12h)
       const tokenAge = Date.now() - (new Date(userToken.updated_at || 0).getTime());
-      const maxAge = 23 * 60 * 60 * 1000; // 23 hours
+      const maxAge = 14 * 60 * 60 * 1000; // 14 hours
       
       if (tokenAge > maxAge) {
         console.error(`[AUTH] Stored token for user ${userId} is too old (${Math.round(tokenAge / 3600000)}h), attempting silent re-login`);

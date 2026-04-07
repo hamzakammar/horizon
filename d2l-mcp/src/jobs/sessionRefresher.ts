@@ -21,7 +21,7 @@ import { getD2LCredentials } from "../auth.js";
 
 const CHROMIUM_PATH = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium";
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // check every 30 min
-const STALE_THRESHOLD_MS = 18 * 60 * 60 * 1000; // refresh if token older than 18h
+const STALE_THRESHOLD_MS = 12 * 60 * 60 * 1000; // refresh if token older than 12h
 const NAV_TIMEOUT_MS = 30_000; // 30s page load timeout
 
 export interface RefreshResult {
