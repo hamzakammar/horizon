@@ -579,9 +579,9 @@ async function main() {
             `[MCP] Reusing existing transport for session: ${sessionId}`
           );
           transport = transports[sessionId];
-        } else if (sessionId && validSessionIds.has(sessionId)) {
-          // Session exists but transport is gone (server restart)
-          // Silently restore the session regardless of request type
+        } else if (sessionId) {
+          // Session ID provided but no transport in memory (server restarted or new container)
+          // Silently restore the session regardless of whether we've seen it before
           console.error(
             `[MCP] Silently restoring session ${sessionId} after server restart`
           );
