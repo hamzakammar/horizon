@@ -38,7 +38,8 @@ export interface RefreshResult {
  */
 async function attemptCredentialLogin(
   userId: string,
-  d2lHost: string
+  d2lHost: string,
+  storageStatePath?: string
 ): Promise<{ token: string; storageStatePath: string } | null> {
   const creds = await getD2LCredentials(userId);
   if (!creds?.username || !creds?.password) {
@@ -61,7 +62,11 @@ async function attemptCredentialLogin(
       ],
     });
 
-    const context = await browser.newContext();
+    // Use S3 storage state so the Duo "remember this device" cookie is present.
+    // Without it, Duo sees a fresh browser and requires a new challenge every time.
+    const context = await browser.newContext(
+      storageStatePath ? { storageState: storageStatePath } : {}
+    );
     const page = await context.newPage();
 
     await page.goto(`https://${d2lHost}/d2l/home`, {
@@ -371,10 +376,10 @@ export async function refreshD2LSession(userId: string): Promise<RefreshResult> 
       finalUrl.includes("adfs");
 
     if (isLoginPage) {
-      console.error(`[REFRESH] ADFS session expired for user ${userId} — trying credential login`);
+      console.error(`[REFRESH] ADFS session expired for user ${userId} — trying credential login with S3 state (Duo cookie)`);
       await browser.close();
       browser = undefined;
-      const credResult = await attemptCredentialLogin(userId, d2lHost);
+      const credResult = await attemptCredentialLogin(userId, d2lHost, storageStatePath);
       if (credResult) {
         console.error(`[REFRESH] Credential login succeeded for user ${userId} (ADFS state expired)`);
         return { success: true };

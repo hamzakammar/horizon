@@ -268,7 +268,11 @@ async function attemptSilentRelogin(userId: string): Promise<string | null> {
       executablePath: chromiumPath,
       args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
     });
-    const context = await browser.newContext();
+    // Restore S3 storage state so the Duo "remember this device" cookie is present,
+    // allowing credential fill to bypass the Duo challenge (same as VNC does).
+    const context = await browser.newContext(
+      storageStatePath ? { storageState: storageStatePath } : {}
+    );
     const page = await context.newPage();
 
     await page.goto(`https://${d2lHost}/d2l/home`, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
