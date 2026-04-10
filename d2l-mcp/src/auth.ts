@@ -301,7 +301,10 @@ async function attemptSilentRelogin(userId: string): Promise<string | null> {
       const preSessionVal = preCookies.find(c => c.name === "d2lSessionVal")?.value;
       const preSecureVal = preCookies.find(c => c.name === "d2lSecureSessionVal")?.value;
 
-      await page.fill('input[type="text"], input[name="UserName"], input[name="username"]', creds.username).catch(() => {});
+      // UWaterloo ADFS requires full UPN format (user@uwaterloo.ca)
+      const loginUsername = creds.username.includes('@') ? creds.username : `${creds.username}@uwaterloo.ca`;
+      console.error(`[AUTH] Using login username: ${loginUsername} (stored: ${creds.username})`);
+      await page.fill('input[type="text"], input[name="UserName"], input[name="username"]', loginUsername).catch(() => {});
 
       // If password field is already visible (single-page ADFS form), skip the "Next" step.
       const passwordVisible = await page.locator('input[type="password"]').isVisible({ timeout: 500 }).catch(() => false);

@@ -99,7 +99,10 @@ async function attemptCredentialLogin(
       const preSecureVal = preCookies.find(c => c.name === "d2lSecureSessionVal" && c.domain.includes(d2lHost))?.value;
 
       console.error(`[REFRESH] Filling credentials for user ${userId}`);
-      await page.fill('input[type="text"], input[name="UserName"], input[name="username"]', creds.username).catch(() => {});
+      // UWaterloo ADFS requires full UPN format (user@uwaterloo.ca)
+      const loginUsername = creds.username.includes('@') ? creds.username : `${creds.username}@uwaterloo.ca`;
+      console.error(`[REFRESH] Using login username: ${loginUsername} (stored: ${creds.username})`);
+      await page.fill('input[type="text"], input[name="UserName"], input[name="username"]', loginUsername).catch(() => {});
 
       // If password field is already visible (single-page ADFS form), skip the "Next" step.
       // If not visible, we need to advance to the password page first.
