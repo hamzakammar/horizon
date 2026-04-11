@@ -1223,6 +1223,22 @@ export async function refreshTokenIfNeeded(userId?: string): Promise<string> {
   return getToken(userId);
 }
 
+/**
+ * Force an immediate headless re-login, bypassing the age check.
+ * Called when a D2L API request returns 403 (server-side session died before the
+ * scheduled refresh had a chance to run).
+ * Returns the new token on success, null if re-login cannot complete headlessly.
+ */
+export async function forceRefreshToken(userId: string): Promise<string | null> {
+  clearTokenCache(userId);
+  console.error(`[AUTH] Force-refreshing token for user ${userId} (session died mid-use)`);
+  const token = await attemptSilentRelogin(userId);
+  if (!token) {
+    await markDuoRequired(userId);
+  }
+  return token;
+}
+
 export function clearTokenCache(userId?: string): void {
   const cacheKey = userId || "default";
   if (userId) {

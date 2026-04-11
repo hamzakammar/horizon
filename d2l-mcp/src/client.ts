@@ -1,4 +1,4 @@
-import { getToken } from "./auth.js";
+import { getToken, forceRefreshToken } from "./auth.js";
 
 const D2L_HOST = process.env.D2L_HOST || "learn.ul.ie";
 const BASE_URL = `https://${D2L_HOST}`;
@@ -21,7 +21,8 @@ export class D2LClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    isRetry = false
   ): Promise<ApiResponse<T>> {
     const requestStartTime = Date.now();
     const baseUrl = this.host ? `https://${this.host}` : BASE_URL;
@@ -76,6 +77,18 @@ export class D2LClient {
       console.error(
         `[API] ${method} ${path} - Error ${response.status} (${totalTime}ms): ${errorText}`
       );
+
+      // On 403, the server-side D2L session may have expired before the scheduler ran.
+      // Attempt an immediate headless re-login and retry the request once.
+      if (response.status === 403 && this.userId && !isRetry) {
+        console.error(`[API] 403 on ${path} for user ${this.userId} — attempting immediate re-auth`);
+        const newToken = await forceRefreshToken(this.userId);
+        if (newToken) {
+          console.error(`[API] Re-auth succeeded, retrying ${method} ${path}`);
+          return this.request<T>(method, path, body, true);
+        }
+      }
+
       throw new Error(`D2L API error ${response.status}: ${errorText}`);
     }
 
