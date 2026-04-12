@@ -48,21 +48,6 @@ CREATE POLICY "tasks_update" ON tasks
 CREATE POLICY "tasks_delete" ON tasks
   FOR DELETE USING (auth.uid()::text = user_id::text);
 
--- ── sync_state ────────────────────────────────────────────────────────────────
-ALTER TABLE sync_state ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "sync_state_select" ON sync_state
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "sync_state_insert" ON sync_state
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "sync_state_update" ON sync_state
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "sync_state_delete" ON sync_state
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
 -- ── notes ─────────────────────────────────────────────────────────────────────
 ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
 
@@ -91,21 +76,6 @@ CREATE POLICY "note_sections_update" ON note_sections
   FOR UPDATE USING (auth.uid()::text = user_id::text);
 
 CREATE POLICY "note_sections_delete" ON note_sections
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── office_hours ──────────────────────────────────────────────────────────────
-ALTER TABLE office_hours ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "office_hours_select" ON office_hours
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "office_hours_insert" ON office_hours
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "office_hours_update" ON office_hours
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "office_hours_delete" ON office_hours
   FOR DELETE USING (auth.uid()::text = user_id::text);
 
 -- ── piazza_posts ──────────────────────────────────────────────────────────────
