@@ -44,8 +44,7 @@ router.post("/keys", async (req: Request, res: Response) => {
     const resp = await fetch(`${sbUrl}/rest/v1/api_keys`, {
       method: "POST",
       headers: { ...headers, "Prefer": "return=representation" },
-      // Only columns guaranteed on RDS/PostgREST api_keys (no optional label column)
-      body: JSON.stringify({ user_id: userId, key_hash: keyHash }),
+      body: JSON.stringify({ user_id: userId, key_hash: keyHash, key_value: plaintext }),
     });
     if (!resp.ok) throw new Error(await resp.text());
     res.json({ apiKey: plaintext });
@@ -55,19 +54,21 @@ router.post("/keys", async (req: Request, res: Response) => {
   }
 });
 
-/** GET /api/keys — check if user has an API key */
+/** GET /api/keys — check if user has an API key, return it if stored */
 router.get("/keys", async (req: Request, res: Response) => {
   const userId = req.userId!;
   try {
     const sbUrl = process.env.SUPABASE_URL;
     const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
     if (!sbUrl || !sbKey) throw new Error("Missing Supabase config");
-    const resp = await fetch(`${sbUrl}/rest/v1/api_keys?user_id=eq.${userId}&select=id&limit=1`, {
+    const resp = await fetch(`${sbUrl}/rest/v1/api_keys?user_id=eq.${userId}&select=id,key_value&limit=1`, {
       headers: { "apikey": sbKey, "Authorization": `Bearer ${sbKey}` },
     });
     if (!resp.ok) throw new Error(await resp.text());
-    const rows = await resp.json();
-    res.json({ hasKey: Array.isArray(rows) && rows.length > 0 });
+    const rows = await resp.json() as Array<{ id: string; key_value?: string }>;
+    const hasKey = Array.isArray(rows) && rows.length > 0;
+    const key = hasKey ? (rows[0].key_value || null) : null;
+    res.json({ hasKey, key });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
