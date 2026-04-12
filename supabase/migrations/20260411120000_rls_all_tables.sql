@@ -1,106 +1,70 @@
 -- Enable Row Level Security on all user-scoped tables.
 -- The backend uses service_role_key (bypasses RLS), so no existing functionality breaks.
 -- This protects against direct anon-key access to other users' data.
--- Both sides cast to text so policies work whether user_id is uuid or text.
+-- Uses existence checks so missing tables are silently skipped.
 
--- ── api_keys ──────────────────────────────────────────────────────────────────
-ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
 
-CREATE POLICY "api_keys_select" ON api_keys
-  FOR SELECT USING (auth.uid()::text = user_id::text);
+  -- ── api_keys ────────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'api_keys') THEN
+    EXECUTE 'ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "api_keys_select" ON api_keys FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "api_keys_insert" ON api_keys FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "api_keys_update" ON api_keys FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "api_keys_delete" ON api_keys FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "api_keys_insert" ON api_keys
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+  -- ── user_credentials ────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_credentials') THEN
+    EXECUTE 'ALTER TABLE user_credentials ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "user_credentials_select" ON user_credentials FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "user_credentials_insert" ON user_credentials FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "user_credentials_update" ON user_credentials FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "user_credentials_delete" ON user_credentials FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "api_keys_update" ON api_keys
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
+  -- ── tasks ────────────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tasks') THEN
+    EXECUTE 'ALTER TABLE tasks ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "tasks_select" ON tasks FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "tasks_insert" ON tasks FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "tasks_update" ON tasks FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "tasks_delete" ON tasks FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "api_keys_delete" ON api_keys
-  FOR DELETE USING (auth.uid()::text = user_id::text);
+  -- ── notes ────────────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'notes') THEN
+    EXECUTE 'ALTER TABLE notes ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "notes_select" ON notes FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "notes_insert" ON notes FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "notes_update" ON notes FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "notes_delete" ON notes FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
--- ── user_credentials ─────────────────────────────────────────────────────────
-ALTER TABLE user_credentials ENABLE ROW LEVEL SECURITY;
+  -- ── note_sections ────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'note_sections') THEN
+    EXECUTE 'ALTER TABLE note_sections ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "note_sections_select" ON note_sections FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "note_sections_insert" ON note_sections FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "note_sections_update" ON note_sections FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "note_sections_delete" ON note_sections FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "user_credentials_select" ON user_credentials
-  FOR SELECT USING (auth.uid()::text = user_id::text);
+  -- ── piazza_posts ─────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'piazza_posts') THEN
+    EXECUTE 'ALTER TABLE piazza_posts ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "piazza_posts_select" ON piazza_posts FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "piazza_posts_insert" ON piazza_posts FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "piazza_posts_update" ON piazza_posts FOR UPDATE USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "piazza_posts_delete" ON piazza_posts FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "user_credentials_insert" ON user_credentials
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
+  -- ── device_tokens ────────────────────────────────────────────────────────────
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'device_tokens') THEN
+    EXECUTE 'ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'CREATE POLICY "device_tokens_select" ON device_tokens FOR SELECT USING (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "device_tokens_insert" ON device_tokens FOR INSERT WITH CHECK (auth.uid()::text = user_id::text)';
+    EXECUTE 'CREATE POLICY "device_tokens_delete" ON device_tokens FOR DELETE USING (auth.uid()::text = user_id::text)';
+  END IF;
 
-CREATE POLICY "user_credentials_update" ON user_credentials
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "user_credentials_delete" ON user_credentials
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── tasks ─────────────────────────────────────────────────────────────────────
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "tasks_select" ON tasks
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "tasks_insert" ON tasks
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "tasks_update" ON tasks
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "tasks_delete" ON tasks
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── notes ─────────────────────────────────────────────────────────────────────
-ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "notes_select" ON notes
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "notes_insert" ON notes
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "notes_update" ON notes
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "notes_delete" ON notes
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── note_sections ─────────────────────────────────────────────────────────────
-ALTER TABLE note_sections ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "note_sections_select" ON note_sections
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "note_sections_insert" ON note_sections
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "note_sections_update" ON note_sections
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "note_sections_delete" ON note_sections
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── piazza_posts ──────────────────────────────────────────────────────────────
-ALTER TABLE piazza_posts ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "piazza_posts_select" ON piazza_posts
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "piazza_posts_insert" ON piazza_posts
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "piazza_posts_update" ON piazza_posts
-  FOR UPDATE USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "piazza_posts_delete" ON piazza_posts
-  FOR DELETE USING (auth.uid()::text = user_id::text);
-
--- ── device_tokens ─────────────────────────────────────────────────────────────
-ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "device_tokens_select" ON device_tokens
-  FOR SELECT USING (auth.uid()::text = user_id::text);
-
-CREATE POLICY "device_tokens_insert" ON device_tokens
-  FOR INSERT WITH CHECK (auth.uid()::text = user_id::text);
-
-CREATE POLICY "device_tokens_delete" ON device_tokens
-  FOR DELETE USING (auth.uid()::text = user_id::text);
+END $$;
